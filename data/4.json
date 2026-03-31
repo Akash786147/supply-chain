@@ -1,0 +1,1712 @@
+{
+  "id": "supply-chain-backend",
+  "name": "supply-chain-backend",
+  "version": "1.0.0",
+  "riskScore": 44,
+  "riskLevel": "medium",
+  "signals": [
+    "deprecated"
+  ],
+  "children": [
+    {
+      "id": "cors",
+      "name": "cors",
+      "version": "2.8.6",
+      "riskScore": 37,
+      "riskLevel": "medium",
+      "signals": [],
+      "children": [
+        {
+          "id": "object-assign",
+          "name": "object-assign",
+          "version": "4.1.1",
+          "riskScore": 71,
+          "riskLevel": "high",
+          "signals": [
+            "known-vulnerability"
+          ],
+          "children": []
+        },
+        {
+          "id": "vary",
+          "name": "vary",
+          "version": "1.1.2",
+          "riskScore": 13,
+          "riskLevel": "low",
+          "signals": [],
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "express",
+      "name": "express",
+      "version": "4.22.1",
+      "riskScore": 83,
+      "riskLevel": "critical",
+      "signals": [],
+      "children": [
+        {
+          "id": "accepts",
+          "name": "accepts",
+          "version": "1.3.8",
+          "riskScore": 96,
+          "riskLevel": "critical",
+          "signals": [],
+          "children": [
+            {
+              "id": "mime-types",
+              "name": "mime-types",
+              "version": "2.1.35",
+              "riskScore": 33,
+              "riskLevel": "medium",
+              "signals": [],
+              "children": [
+                {
+                  "id": "mime-db",
+                  "name": "mime-db",
+                  "version": "1.52.0",
+                  "riskScore": 27,
+                  "riskLevel": "medium",
+                  "signals": [],
+                  "children": []
+                }
+              ]
+            },
+            {
+              "id": "negotiator",
+              "name": "negotiator",
+              "version": "0.6.3",
+              "riskScore": 25,
+              "riskLevel": "low",
+              "signals": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "array-flatten",
+          "name": "array-flatten",
+          "version": "1.1.1",
+          "riskScore": 98,
+          "riskLevel": "critical",
+          "signals": [],
+          "children": []
+        },
+        {
+          "id": "body-parser",
+          "name": "body-parser",
+          "version": "1.20.4",
+          "riskScore": 86,
+          "riskLevel": "critical",
+          "signals": [],
+          "children": [
+            {
+              "id": "bytes",
+              "name": "bytes",
+              "version": "3.1.2",
+              "riskScore": 9,
+              "riskLevel": "low",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "content-type",
+              "name": "content-type",
+              "version": "1.0.5",
+              "riskScore": 63,
+              "riskLevel": "high",
+              "signals": [
+                "few-maintainers"
+              ],
+              "children": []
+            },
+            {
+              "id": "debug",
+              "name": "debug",
+              "version": "2.6.9",
+              "riskScore": 72,
+              "riskLevel": "high",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "depd",
+              "name": "depd",
+              "version": "2.0.0",
+              "riskScore": 33,
+              "riskLevel": "medium",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "destroy",
+              "name": "destroy",
+              "version": "1.2.0",
+              "riskScore": 78,
+              "riskLevel": "critical",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "http-errors",
+              "name": "http-errors",
+              "version": "2.0.1",
+              "riskScore": 80,
+              "riskLevel": "critical",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "iconv-lite",
+              "name": "iconv-lite",
+              "version": "0.4.24",
+              "riskScore": 17,
+              "riskLevel": "low",
+              "signals": [],
+              "children": [
+                {
+                  "id": "safer-buffer",
+                  "name": "safer-buffer",
+                  "version": "2.1.2",
+                  "riskScore": 85,
+                  "riskLevel": "critical",
+                  "signals": [],
+                  "children": []
+                }
+              ]
+            },
+            {
+              "id": "on-finished",
+              "name": "on-finished",
+              "version": "2.4.1",
+              "riskScore": 53,
+              "riskLevel": "high",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "qs",
+              "name": "qs",
+              "version": "6.14.2",
+              "riskScore": 81,
+              "riskLevel": "critical",
+              "signals": [
+                "deprecated"
+              ],
+              "children": []
+            },
+            {
+              "id": "raw-body",
+              "name": "raw-body",
+              "version": "2.5.3",
+              "riskScore": 35,
+              "riskLevel": "medium",
+              "signals": [
+                "outdated"
+              ],
+              "children": [
+                {
+                  "id": "bytes",
+                  "name": "bytes",
+                  "version": "3.1.2",
+                  "riskScore": 73,
+                  "riskLevel": "high",
+                  "signals": [],
+                  "children": []
+                },
+                {
+                  "id": "http-errors",
+                  "name": "http-errors",
+                  "version": "2.0.1",
+                  "riskScore": 95,
+                  "riskLevel": "critical",
+                  "signals": [
+                    "few-maintainers"
+                  ],
+                  "children": []
+                },
+                {
+                  "id": "iconv-lite",
+                  "name": "iconv-lite",
+                  "version": "0.4.24",
+                  "riskScore": 94,
+                  "riskLevel": "critical",
+                  "signals": [],
+                  "children": []
+                },
+                {
+                  "id": "unpipe",
+                  "name": "unpipe",
+                  "version": "1.0.0",
+                  "riskScore": 46,
+                  "riskLevel": "medium",
+                  "signals": [
+                    "deprecated"
+                  ],
+                  "children": []
+                }
+              ]
+            },
+            {
+              "id": "type-is",
+              "name": "type-is",
+              "version": "1.6.18",
+              "riskScore": 60,
+              "riskLevel": "high",
+              "signals": [
+                "deprecated"
+              ],
+              "children": []
+            },
+            {
+              "id": "unpipe",
+              "name": "unpipe",
+              "version": "1.0.0",
+              "riskScore": 73,
+              "riskLevel": "high",
+              "signals": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "content-disposition",
+          "name": "content-disposition",
+          "version": "0.5.4",
+          "riskScore": 49,
+          "riskLevel": "medium",
+          "signals": [],
+          "children": [
+            {
+              "id": "safe-buffer",
+              "name": "safe-buffer",
+              "version": "5.2.1",
+              "riskScore": 91,
+              "riskLevel": "critical",
+              "signals": [
+                "few-maintainers"
+              ],
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "content-type",
+          "name": "content-type",
+          "version": "1.0.5",
+          "riskScore": 34,
+          "riskLevel": "medium",
+          "signals": [],
+          "children": []
+        },
+        {
+          "id": "cookie-signature",
+          "name": "cookie-signature",
+          "version": "1.0.7",
+          "riskScore": 69,
+          "riskLevel": "high",
+          "signals": [],
+          "children": []
+        },
+        {
+          "id": "cookie",
+          "name": "cookie",
+          "version": "0.7.2",
+          "riskScore": 57,
+          "riskLevel": "high",
+          "signals": [
+            "known-vulnerability"
+          ],
+          "children": []
+        },
+        {
+          "id": "debug",
+          "name": "debug",
+          "version": "2.6.9",
+          "riskScore": 68,
+          "riskLevel": "high",
+          "signals": [],
+          "children": [
+            {
+              "id": "ms",
+              "name": "ms",
+              "version": "2.0.0",
+              "riskScore": 26,
+              "riskLevel": "medium",
+              "signals": [
+                "known-vulnerability"
+              ],
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "depd",
+          "name": "depd",
+          "version": "2.0.0",
+          "riskScore": 62,
+          "riskLevel": "high",
+          "signals": [],
+          "children": []
+        },
+        {
+          "id": "encodeurl",
+          "name": "encodeurl",
+          "version": "2.0.0",
+          "riskScore": 92,
+          "riskLevel": "critical",
+          "signals": [],
+          "children": []
+        },
+        {
+          "id": "escape-html",
+          "name": "escape-html",
+          "version": "1.0.3",
+          "riskScore": 25,
+          "riskLevel": "low",
+          "signals": [],
+          "children": []
+        },
+        {
+          "id": "etag",
+          "name": "etag",
+          "version": "1.8.1",
+          "riskScore": 46,
+          "riskLevel": "medium",
+          "signals": [],
+          "children": []
+        },
+        {
+          "id": "finalhandler",
+          "name": "finalhandler",
+          "version": "1.3.2",
+          "riskScore": 64,
+          "riskLevel": "high",
+          "signals": [],
+          "children": [
+            {
+              "id": "debug",
+              "name": "debug",
+              "version": "2.6.9",
+              "riskScore": 83,
+              "riskLevel": "critical",
+              "signals": [
+                "known-vulnerability"
+              ],
+              "children": []
+            },
+            {
+              "id": "encodeurl",
+              "name": "encodeurl",
+              "version": "2.0.0",
+              "riskScore": 25,
+              "riskLevel": "low",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "escape-html",
+              "name": "escape-html",
+              "version": "1.0.3",
+              "riskScore": 41,
+              "riskLevel": "medium",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "on-finished",
+              "name": "on-finished",
+              "version": "2.4.1",
+              "riskScore": 98,
+              "riskLevel": "critical",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "parseurl",
+              "name": "parseurl",
+              "version": "1.3.3",
+              "riskScore": 75,
+              "riskLevel": "high",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "statuses",
+              "name": "statuses",
+              "version": "2.0.2",
+              "riskScore": 59,
+              "riskLevel": "high",
+              "signals": [
+                "few-maintainers"
+              ],
+              "children": []
+            },
+            {
+              "id": "unpipe",
+              "name": "unpipe",
+              "version": "1.0.0",
+              "riskScore": 35,
+              "riskLevel": "medium",
+              "signals": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "fresh",
+          "name": "fresh",
+          "version": "0.5.2",
+          "riskScore": 15,
+          "riskLevel": "low",
+          "signals": [],
+          "children": []
+        },
+        {
+          "id": "http-errors",
+          "name": "http-errors",
+          "version": "2.0.1",
+          "riskScore": 21,
+          "riskLevel": "low",
+          "signals": [],
+          "children": [
+            {
+              "id": "depd",
+              "name": "depd",
+              "version": "2.0.0",
+              "riskScore": 65,
+              "riskLevel": "high",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "inherits",
+              "name": "inherits",
+              "version": "2.0.4",
+              "riskScore": 66,
+              "riskLevel": "high",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "setprototypeof",
+              "name": "setprototypeof",
+              "version": "1.2.0",
+              "riskScore": 65,
+              "riskLevel": "high",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "statuses",
+              "name": "statuses",
+              "version": "2.0.2",
+              "riskScore": 26,
+              "riskLevel": "medium",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "toidentifier",
+              "name": "toidentifier",
+              "version": "1.0.1",
+              "riskScore": 27,
+              "riskLevel": "medium",
+              "signals": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "merge-descriptors",
+          "name": "merge-descriptors",
+          "version": "1.0.3",
+          "riskScore": 41,
+          "riskLevel": "medium",
+          "signals": [],
+          "children": []
+        },
+        {
+          "id": "methods",
+          "name": "methods",
+          "version": "1.1.2",
+          "riskScore": 21,
+          "riskLevel": "low",
+          "signals": [],
+          "children": []
+        },
+        {
+          "id": "on-finished",
+          "name": "on-finished",
+          "version": "2.4.1",
+          "riskScore": 20,
+          "riskLevel": "low",
+          "signals": [],
+          "children": [
+            {
+              "id": "ee-first",
+              "name": "ee-first",
+              "version": "1.1.1",
+              "riskScore": 24,
+              "riskLevel": "low",
+              "signals": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "parseurl",
+          "name": "parseurl",
+          "version": "1.3.3",
+          "riskScore": 49,
+          "riskLevel": "medium",
+          "signals": [
+            "few-maintainers"
+          ],
+          "children": []
+        },
+        {
+          "id": "path-to-regexp",
+          "name": "path-to-regexp",
+          "version": "0.1.12",
+          "riskScore": 81,
+          "riskLevel": "critical",
+          "signals": [
+            "known-vulnerability"
+          ],
+          "children": []
+        },
+        {
+          "id": "proxy-addr",
+          "name": "proxy-addr",
+          "version": "2.0.7",
+          "riskScore": 40,
+          "riskLevel": "medium",
+          "signals": [],
+          "children": [
+            {
+              "id": "forwarded",
+              "name": "forwarded",
+              "version": "0.2.0",
+              "riskScore": 20,
+              "riskLevel": "low",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "ipaddr.js",
+              "name": "ipaddr.js",
+              "version": "1.9.1",
+              "riskScore": 62,
+              "riskLevel": "high",
+              "signals": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "qs",
+          "name": "qs",
+          "version": "6.14.2",
+          "riskScore": 61,
+          "riskLevel": "high",
+          "signals": [
+            "deprecated"
+          ],
+          "children": [
+            {
+              "id": "side-channel",
+              "name": "side-channel",
+              "version": "1.1.0",
+              "riskScore": 97,
+              "riskLevel": "critical",
+              "signals": [],
+              "children": [
+                {
+                  "id": "es-errors",
+                  "name": "es-errors",
+                  "version": "1.3.0",
+                  "riskScore": 34,
+                  "riskLevel": "medium",
+                  "signals": [],
+                  "children": []
+                },
+                {
+                  "id": "object-inspect",
+                  "name": "object-inspect",
+                  "version": "1.13.4",
+                  "riskScore": 79,
+                  "riskLevel": "critical",
+                  "signals": [],
+                  "children": []
+                },
+                {
+                  "id": "side-channel-list",
+                  "name": "side-channel-list",
+                  "version": "1.0.0",
+                  "riskScore": 84,
+                  "riskLevel": "critical",
+                  "signals": [],
+                  "children": [
+                    {
+                      "id": "es-errors",
+                      "name": "es-errors",
+                      "version": "1.3.0",
+                      "riskScore": 60,
+                      "riskLevel": "high",
+                      "signals": [],
+                      "children": []
+                    },
+                    {
+                      "id": "object-inspect",
+                      "name": "object-inspect",
+                      "version": "1.13.4",
+                      "riskScore": 52,
+                      "riskLevel": "high",
+                      "signals": [],
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "id": "side-channel-map",
+                  "name": "side-channel-map",
+                  "version": "1.0.1",
+                  "riskScore": 40,
+                  "riskLevel": "medium",
+                  "signals": [
+                    "few-maintainers"
+                  ],
+                  "children": [
+                    {
+                      "id": "call-bound",
+                      "name": "call-bound",
+                      "version": "1.0.4",
+                      "riskScore": 79,
+                      "riskLevel": "critical",
+                      "signals": [
+                        "known-vulnerability"
+                      ],
+                      "children": [
+                        {
+                          "id": "call-bind-apply-helpers",
+                          "name": "call-bind-apply-helpers",
+                          "version": "1.0.2",
+                          "riskScore": 92,
+                          "riskLevel": "critical",
+                          "signals": [
+                            "deprecated"
+                          ],
+                          "children": [
+                            {
+                              "id": "es-errors",
+                              "name": "es-errors",
+                              "version": "1.3.0",
+                              "riskScore": 51,
+                              "riskLevel": "high",
+                              "signals": [],
+                              "children": []
+                            },
+                            {
+                              "id": "function-bind",
+                              "name": "function-bind",
+                              "version": "1.1.2",
+                              "riskScore": 99,
+                              "riskLevel": "critical",
+                              "signals": [],
+                              "children": []
+                            }
+                          ]
+                        },
+                        {
+                          "id": "get-intrinsic",
+                          "name": "get-intrinsic",
+                          "version": "1.3.0",
+                          "riskScore": 68,
+                          "riskLevel": "high",
+                          "signals": [],
+                          "children": []
+                        }
+                      ]
+                    },
+                    {
+                      "id": "es-errors",
+                      "name": "es-errors",
+                      "version": "1.3.0",
+                      "riskScore": 10,
+                      "riskLevel": "low",
+                      "signals": [],
+                      "children": []
+                    },
+                    {
+                      "id": "get-intrinsic",
+                      "name": "get-intrinsic",
+                      "version": "1.3.0",
+                      "riskScore": 63,
+                      "riskLevel": "high",
+                      "signals": [],
+                      "children": [
+                        {
+                          "id": "call-bind-apply-helpers",
+                          "name": "call-bind-apply-helpers",
+                          "version": "1.0.2",
+                          "riskScore": 27,
+                          "riskLevel": "medium",
+                          "signals": [
+                            "deprecated"
+                          ],
+                          "children": []
+                        },
+                        {
+                          "id": "es-define-property",
+                          "name": "es-define-property",
+                          "version": "1.0.1",
+                          "riskScore": 14,
+                          "riskLevel": "low",
+                          "signals": [],
+                          "children": []
+                        },
+                        {
+                          "id": "es-errors",
+                          "name": "es-errors",
+                          "version": "1.3.0",
+                          "riskScore": 27,
+                          "riskLevel": "medium",
+                          "signals": [],
+                          "children": []
+                        },
+                        {
+                          "id": "es-object-atoms",
+                          "name": "es-object-atoms",
+                          "version": "1.1.1",
+                          "riskScore": 87,
+                          "riskLevel": "critical",
+                          "signals": [
+                            "deprecated"
+                          ],
+                          "children": [
+                            {
+                              "id": "es-errors",
+                              "name": "es-errors",
+                              "version": "1.3.0",
+                              "riskScore": 9,
+                              "riskLevel": "low",
+                              "signals": [],
+                              "children": []
+                            }
+                          ]
+                        },
+                        {
+                          "id": "function-bind",
+                          "name": "function-bind",
+                          "version": "1.1.2",
+                          "riskScore": 90,
+                          "riskLevel": "critical",
+                          "signals": [],
+                          "children": []
+                        },
+                        {
+                          "id": "get-proto",
+                          "name": "get-proto",
+                          "version": "1.0.1",
+                          "riskScore": 24,
+                          "riskLevel": "low",
+                          "signals": [],
+                          "children": [
+                            {
+                              "id": "dunder-proto",
+                              "name": "dunder-proto",
+                              "version": "1.0.1",
+                              "riskScore": 51,
+                              "riskLevel": "high",
+                              "signals": [
+                                "few-maintainers"
+                              ],
+                              "children": [
+                                {
+                                  "id": "call-bind-apply-helpers",
+                                  "name": "call-bind-apply-helpers",
+                                  "version": "1.0.2",
+                                  "riskScore": 46,
+                                  "riskLevel": "medium",
+                                  "signals": [],
+                                  "children": []
+                                },
+                                {
+                                  "id": "es-errors",
+                                  "name": "es-errors",
+                                  "version": "1.3.0",
+                                  "riskScore": 92,
+                                  "riskLevel": "critical",
+                                  "signals": [],
+                                  "children": []
+                                },
+                                {
+                                  "id": "gopd",
+                                  "name": "gopd",
+                                  "version": "1.2.0",
+                                  "riskScore": 74,
+                                  "riskLevel": "high",
+                                  "signals": [],
+                                  "children": []
+                                }
+                              ]
+                            },
+                            {
+                              "id": "es-object-atoms",
+                              "name": "es-object-atoms",
+                              "version": "1.1.1",
+                              "riskScore": 30,
+                              "riskLevel": "medium",
+                              "signals": [],
+                              "children": []
+                            }
+                          ]
+                        },
+                        {
+                          "id": "gopd",
+                          "name": "gopd",
+                          "version": "1.2.0",
+                          "riskScore": 2,
+                          "riskLevel": "low",
+                          "signals": [],
+                          "children": []
+                        },
+                        {
+                          "id": "has-symbols",
+                          "name": "has-symbols",
+                          "version": "1.1.0",
+                          "riskScore": 87,
+                          "riskLevel": "critical",
+                          "signals": [],
+                          "children": []
+                        },
+                        {
+                          "id": "hasown",
+                          "name": "hasown",
+                          "version": "2.0.2",
+                          "riskScore": 92,
+                          "riskLevel": "critical",
+                          "signals": [],
+                          "children": [
+                            {
+                              "id": "function-bind",
+                              "name": "function-bind",
+                              "version": "1.1.2",
+                              "riskScore": 63,
+                              "riskLevel": "high",
+                              "signals": [],
+                              "children": []
+                            }
+                          ]
+                        },
+                        {
+                          "id": "math-intrinsics",
+                          "name": "math-intrinsics",
+                          "version": "1.1.0",
+                          "riskScore": 4,
+                          "riskLevel": "low",
+                          "signals": [],
+                          "children": []
+                        }
+                      ]
+                    },
+                    {
+                      "id": "object-inspect",
+                      "name": "object-inspect",
+                      "version": "1.13.4",
+                      "riskScore": 84,
+                      "riskLevel": "critical",
+                      "signals": [],
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "id": "side-channel-weakmap",
+                  "name": "side-channel-weakmap",
+                  "version": "1.0.2",
+                  "riskScore": 28,
+                  "riskLevel": "medium",
+                  "signals": [],
+                  "children": [
+                    {
+                      "id": "call-bound",
+                      "name": "call-bound",
+                      "version": "1.0.4",
+                      "riskScore": 25,
+                      "riskLevel": "low",
+                      "signals": [],
+                      "children": []
+                    },
+                    {
+                      "id": "es-errors",
+                      "name": "es-errors",
+                      "version": "1.3.0",
+                      "riskScore": 63,
+                      "riskLevel": "high",
+                      "signals": [],
+                      "children": []
+                    },
+                    {
+                      "id": "get-intrinsic",
+                      "name": "get-intrinsic",
+                      "version": "1.3.0",
+                      "riskScore": 90,
+                      "riskLevel": "critical",
+                      "signals": [
+                        "few-maintainers"
+                      ],
+                      "children": []
+                    },
+                    {
+                      "id": "object-inspect",
+                      "name": "object-inspect",
+                      "version": "1.13.4",
+                      "riskScore": 57,
+                      "riskLevel": "high",
+                      "signals": [],
+                      "children": []
+                    },
+                    {
+                      "id": "side-channel-map",
+                      "name": "side-channel-map",
+                      "version": "1.0.1",
+                      "riskScore": 33,
+                      "riskLevel": "medium",
+                      "signals": [
+                        "outdated"
+                      ],
+                      "children": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "range-parser",
+          "name": "range-parser",
+          "version": "1.2.1",
+          "riskScore": 72,
+          "riskLevel": "high",
+          "signals": [],
+          "children": []
+        },
+        {
+          "id": "safe-buffer",
+          "name": "safe-buffer",
+          "version": "5.2.1",
+          "riskScore": 78,
+          "riskLevel": "critical",
+          "signals": [],
+          "children": []
+        },
+        {
+          "id": "send",
+          "name": "send",
+          "version": "0.19.2",
+          "riskScore": 81,
+          "riskLevel": "critical",
+          "signals": [
+            "outdated"
+          ],
+          "children": [
+            {
+              "id": "debug",
+              "name": "debug",
+              "version": "2.6.9",
+              "riskScore": 93,
+              "riskLevel": "critical",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "depd",
+              "name": "depd",
+              "version": "2.0.0",
+              "riskScore": 79,
+              "riskLevel": "critical",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "destroy",
+              "name": "destroy",
+              "version": "1.2.0",
+              "riskScore": 97,
+              "riskLevel": "critical",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "encodeurl",
+              "name": "encodeurl",
+              "version": "2.0.0",
+              "riskScore": 97,
+              "riskLevel": "critical",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "escape-html",
+              "name": "escape-html",
+              "version": "1.0.3",
+              "riskScore": 2,
+              "riskLevel": "low",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "etag",
+              "name": "etag",
+              "version": "1.8.1",
+              "riskScore": 91,
+              "riskLevel": "critical",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "fresh",
+              "name": "fresh",
+              "version": "0.5.2",
+              "riskScore": 53,
+              "riskLevel": "high",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "http-errors",
+              "name": "http-errors",
+              "version": "2.0.1",
+              "riskScore": 11,
+              "riskLevel": "low",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "mime",
+              "name": "mime",
+              "version": "1.6.0",
+              "riskScore": 20,
+              "riskLevel": "low",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "ms",
+              "name": "ms",
+              "version": "2.1.3",
+              "riskScore": 51,
+              "riskLevel": "high",
+              "signals": [
+                "known-vulnerability"
+              ],
+              "children": []
+            },
+            {
+              "id": "on-finished",
+              "name": "on-finished",
+              "version": "2.4.1",
+              "riskScore": 34,
+              "riskLevel": "medium",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "range-parser",
+              "name": "range-parser",
+              "version": "1.2.1",
+              "riskScore": 94,
+              "riskLevel": "critical",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "statuses",
+              "name": "statuses",
+              "version": "2.0.2",
+              "riskScore": 25,
+              "riskLevel": "low",
+              "signals": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "serve-static",
+          "name": "serve-static",
+          "version": "1.16.3",
+          "riskScore": 7,
+          "riskLevel": "low",
+          "signals": [],
+          "children": [
+            {
+              "id": "encodeurl",
+              "name": "encodeurl",
+              "version": "2.0.0",
+              "riskScore": 92,
+              "riskLevel": "critical",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "escape-html",
+              "name": "escape-html",
+              "version": "1.0.3",
+              "riskScore": 66,
+              "riskLevel": "high",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "parseurl",
+              "name": "parseurl",
+              "version": "1.3.3",
+              "riskScore": 66,
+              "riskLevel": "high",
+              "signals": [
+                "known-vulnerability"
+              ],
+              "children": []
+            },
+            {
+              "id": "send",
+              "name": "send",
+              "version": "0.19.2",
+              "riskScore": 38,
+              "riskLevel": "medium",
+              "signals": [
+                "few-maintainers"
+              ],
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "setprototypeof",
+          "name": "setprototypeof",
+          "version": "1.2.0",
+          "riskScore": 46,
+          "riskLevel": "medium",
+          "signals": [],
+          "children": []
+        },
+        {
+          "id": "statuses",
+          "name": "statuses",
+          "version": "2.0.2",
+          "riskScore": 35,
+          "riskLevel": "medium",
+          "signals": [],
+          "children": []
+        },
+        {
+          "id": "type-is",
+          "name": "type-is",
+          "version": "1.6.18",
+          "riskScore": 56,
+          "riskLevel": "high",
+          "signals": [],
+          "children": [
+            {
+              "id": "media-typer",
+              "name": "media-typer",
+              "version": "0.3.0",
+              "riskScore": 89,
+              "riskLevel": "critical",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "mime-types",
+              "name": "mime-types",
+              "version": "2.1.35",
+              "riskScore": 91,
+              "riskLevel": "critical",
+              "signals": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "utils-merge",
+          "name": "utils-merge",
+          "version": "1.0.1",
+          "riskScore": 43,
+          "riskLevel": "medium",
+          "signals": [],
+          "children": []
+        },
+        {
+          "id": "vary",
+          "name": "vary",
+          "version": "1.1.2",
+          "riskScore": 36,
+          "riskLevel": "medium",
+          "signals": [],
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "fs-extra",
+      "name": "fs-extra",
+      "version": "11.3.4",
+      "riskScore": 12,
+      "riskLevel": "low",
+      "signals": [],
+      "children": [
+        {
+          "id": "graceful-fs",
+          "name": "graceful-fs",
+          "version": "4.2.11",
+          "riskScore": 21,
+          "riskLevel": "low",
+          "signals": [],
+          "children": []
+        },
+        {
+          "id": "jsonfile",
+          "name": "jsonfile",
+          "version": "6.2.0",
+          "riskScore": 67,
+          "riskLevel": "high",
+          "signals": [],
+          "children": [
+            {
+              "id": "graceful-fs",
+              "name": "graceful-fs",
+              "version": "4.2.11",
+              "riskScore": 5,
+              "riskLevel": "low",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "universalify",
+              "name": "universalify",
+              "version": "2.0.1",
+              "riskScore": 58,
+              "riskLevel": "high",
+              "signals": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "universalify",
+          "name": "universalify",
+          "version": "2.0.1",
+          "riskScore": 61,
+          "riskLevel": "high",
+          "signals": [],
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "nodemon",
+      "name": "nodemon",
+      "version": "3.1.14",
+      "riskScore": 84,
+      "riskLevel": "critical",
+      "signals": [],
+      "children": [
+        {
+          "id": "chokidar",
+          "name": "chokidar",
+          "version": "3.6.0",
+          "riskScore": 78,
+          "riskLevel": "critical",
+          "signals": [
+            "outdated"
+          ],
+          "children": [
+            {
+              "id": "anymatch",
+              "name": "anymatch",
+              "version": "3.1.3",
+              "riskScore": 8,
+              "riskLevel": "low",
+              "signals": [],
+              "children": [
+                {
+                  "id": "normalize-path",
+                  "name": "normalize-path",
+                  "version": "3.0.0",
+                  "riskScore": 27,
+                  "riskLevel": "medium",
+                  "signals": [],
+                  "children": []
+                },
+                {
+                  "id": "picomatch",
+                  "name": "picomatch",
+                  "version": "2.3.1",
+                  "riskScore": 38,
+                  "riskLevel": "medium",
+                  "signals": [],
+                  "children": []
+                }
+              ]
+            },
+            {
+              "id": "braces",
+              "name": "braces",
+              "version": "3.0.3",
+              "riskScore": 59,
+              "riskLevel": "high",
+              "signals": [],
+              "children": [
+                {
+                  "id": "fill-range",
+                  "name": "fill-range",
+                  "version": "7.1.1",
+                  "riskScore": 81,
+                  "riskLevel": "critical",
+                  "signals": [],
+                  "children": [
+                    {
+                      "id": "to-regex-range",
+                      "name": "to-regex-range",
+                      "version": "5.0.1",
+                      "riskScore": 67,
+                      "riskLevel": "high",
+                      "signals": [],
+                      "children": [
+                        {
+                          "id": "is-number",
+                          "name": "is-number",
+                          "version": "7.0.0",
+                          "riskScore": 84,
+                          "riskLevel": "critical",
+                          "signals": [],
+                          "children": []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "fsevents",
+              "name": "fsevents",
+              "riskScore": 77,
+              "riskLevel": "critical",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "glob-parent",
+              "name": "glob-parent",
+              "version": "5.1.2",
+              "riskScore": 62,
+              "riskLevel": "high",
+              "signals": [],
+              "children": [
+                {
+                  "id": "is-glob",
+                  "name": "is-glob",
+                  "version": "4.0.3",
+                  "riskScore": 93,
+                  "riskLevel": "critical",
+                  "signals": [
+                    "few-maintainers"
+                  ],
+                  "children": []
+                }
+              ]
+            },
+            {
+              "id": "is-binary-path",
+              "name": "is-binary-path",
+              "version": "2.1.0",
+              "riskScore": 51,
+              "riskLevel": "high",
+              "signals": [
+                "known-vulnerability"
+              ],
+              "children": [
+                {
+                  "id": "binary-extensions",
+                  "name": "binary-extensions",
+                  "version": "2.3.0",
+                  "riskScore": 69,
+                  "riskLevel": "high",
+                  "signals": [
+                    "known-vulnerability"
+                  ],
+                  "children": []
+                }
+              ]
+            },
+            {
+              "id": "is-glob",
+              "name": "is-glob",
+              "version": "4.0.3",
+              "riskScore": 2,
+              "riskLevel": "low",
+              "signals": [],
+              "children": [
+                {
+                  "id": "is-extglob",
+                  "name": "is-extglob",
+                  "version": "2.1.1",
+                  "riskScore": 5,
+                  "riskLevel": "low",
+                  "signals": [],
+                  "children": []
+                }
+              ]
+            },
+            {
+              "id": "normalize-path",
+              "name": "normalize-path",
+              "version": "3.0.0",
+              "riskScore": 33,
+              "riskLevel": "medium",
+              "signals": [],
+              "children": []
+            },
+            {
+              "id": "readdirp",
+              "name": "readdirp",
+              "version": "3.6.0",
+              "riskScore": 78,
+              "riskLevel": "critical",
+              "signals": [],
+              "children": [
+                {
+                  "id": "picomatch",
+                  "name": "picomatch",
+                  "version": "2.3.1",
+                  "riskScore": 12,
+                  "riskLevel": "low",
+                  "signals": [],
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "debug",
+          "name": "debug",
+          "version": "4.4.3",
+          "riskScore": 76,
+          "riskLevel": "critical",
+          "signals": [],
+          "children": [
+            {
+              "id": "ms",
+              "name": "ms",
+              "version": "2.1.3",
+              "riskScore": 45,
+              "riskLevel": "medium",
+              "signals": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "ignore-by-default",
+          "name": "ignore-by-default",
+          "version": "1.0.1",
+          "riskScore": 94,
+          "riskLevel": "critical",
+          "signals": [],
+          "children": []
+        },
+        {
+          "id": "minimatch",
+          "name": "minimatch",
+          "version": "10.2.4",
+          "riskScore": 38,
+          "riskLevel": "medium",
+          "signals": [],
+          "children": [
+            {
+              "id": "brace-expansion",
+              "name": "brace-expansion",
+              "version": "5.0.4",
+              "riskScore": 68,
+              "riskLevel": "high",
+              "signals": [
+                "few-maintainers"
+              ],
+              "children": [
+                {
+                  "id": "balanced-match",
+                  "name": "balanced-match",
+                  "version": "4.0.4",
+                  "riskScore": 88,
+                  "riskLevel": "critical",
+                  "signals": [],
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "pstree.remy",
+          "name": "pstree.remy",
+          "version": "1.1.8",
+          "riskScore": 65,
+          "riskLevel": "high",
+          "signals": [],
+          "children": []
+        },
+        {
+          "id": "semver",
+          "name": "semver",
+          "version": "7.7.4",
+          "riskScore": 44,
+          "riskLevel": "medium",
+          "signals": [],
+          "children": []
+        },
+        {
+          "id": "simple-update-notifier",
+          "name": "simple-update-notifier",
+          "version": "2.0.0",
+          "riskScore": 93,
+          "riskLevel": "critical",
+          "signals": [],
+          "children": [
+            {
+              "id": "semver",
+              "name": "semver",
+              "version": "7.7.4",
+              "riskScore": 72,
+              "riskLevel": "high",
+              "signals": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "supports-color",
+          "name": "supports-color",
+          "version": "5.5.0",
+          "riskScore": 43,
+          "riskLevel": "medium",
+          "signals": [],
+          "children": [
+            {
+              "id": "has-flag",
+              "name": "has-flag",
+              "version": "3.0.0",
+              "riskScore": 18,
+              "riskLevel": "low",
+              "signals": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "touch",
+          "name": "touch",
+          "version": "3.1.1",
+          "riskScore": 60,
+          "riskLevel": "high",
+          "signals": [],
+          "children": []
+        },
+        {
+          "id": "undefsafe",
+          "name": "undefsafe",
+          "version": "2.0.5",
+          "riskScore": 53,
+          "riskLevel": "high",
+          "signals": [
+            "deprecated"
+          ],
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "simple-git",
+      "name": "simple-git",
+      "version": "3.33.0",
+      "riskScore": 44,
+      "riskLevel": "medium",
+      "signals": [],
+      "children": [
+        {
+          "id": "@kwsites/file-exists",
+          "name": "@kwsites/file-exists",
+          "version": "1.1.1",
+          "riskScore": 28,
+          "riskLevel": "medium",
+          "signals": [],
+          "children": [
+            {
+              "id": "debug",
+              "name": "debug",
+              "version": "4.4.3",
+              "riskScore": 54,
+              "riskLevel": "high",
+              "signals": [],
+              "children": [
+                {
+                  "id": "ms",
+                  "name": "ms",
+                  "version": "2.1.3",
+                  "riskScore": 18,
+                  "riskLevel": "low",
+                  "signals": [],
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "@kwsites/promise-deferred",
+          "name": "@kwsites/promise-deferred",
+          "version": "1.1.1",
+          "riskScore": 12,
+          "riskLevel": "low",
+          "signals": [],
+          "children": []
+        },
+        {
+          "id": "debug",
+          "name": "debug",
+          "version": "4.4.3",
+          "riskScore": 35,
+          "riskLevel": "medium",
+          "signals": [],
+          "children": [
+            {
+              "id": "ms",
+              "name": "ms",
+              "version": "2.1.3",
+              "riskScore": 31,
+              "riskLevel": "medium",
+              "signals": [
+                "known-vulnerability"
+              ],
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "uuid",
+      "name": "uuid",
+      "version": "9.0.1",
+      "riskScore": 2,
+      "riskLevel": "low",
+      "signals": [],
+      "children": []
+    }
+  ]
+}
