@@ -1,15 +1,24 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { fetchProjects, createProject, deleteProject } from "../api";
-import type { Project } from "../types";
+import { fetchProjects, createProject, deleteProject, fetchGlobalStats } from "../api";
+import type { Project, GlobalStats } from "../types";
 
 export default function Dashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [repoUrl, setRepoUrl] = useState("");
+  const [globalStats, setGlobalStats] = useState<GlobalStats | null>(null);
+
+  const loadData = () => {
+    fetchProjects().then(setProjects);
+    fetchGlobalStats().then(setGlobalStats).catch(() => {});
+  };
 
   useEffect(() => {
-    fetchProjects().then(setProjects);
+    loadData();
+    // Poll for status updates every 5 seconds
+    const interval = setInterval(loadData, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleAdd = async () => {
@@ -27,7 +36,7 @@ export default function Dashboard() {
 
   const statusColor = (s: string) => {
     if (s === "success") return "var(--green)";
-    if (s === "warning" || s === "building...") return "var(--yellow)";
+    if (s === "warning" || s === "running" || s === "pending") return "var(--yellow)";
     if (s === "failed") return "var(--red)";
     return "var(--muted)";
   };
@@ -39,28 +48,60 @@ export default function Dashboard() {
     return "var(--muted)";
   };
 
+  const ecoIcon = (eco: string) => {
+    if (eco === "pypi" || eco === "python") return "🐍";
+    return "📦";
+  };
+
   return (
     <div className="page">
+      {/* Global Stats Bar */}
+      {globalStats && globalStats.totalScans > 0 && (
+        <div className="global-stats-bar">
+          <div className="global-stat">
+            <span className="global-stat-value">{globalStats.totalScans}</span>
+            <span className="global-stat-label">Total Scans</span>
+          </div>
+          <div className="global-stat">
+            <span className="global-stat-value">{globalStats.totalPackagesAnalyzed.toLocaleString()}</span>
+            <span className="global-stat-label">Packages Analyzed</span>
+          </div>
+          <div className="global-stat">
+            <span className="global-stat-value" style={{ color: "var(--red)" }}>{globalStats.totalAnomalies}</span>
+            <span className="global-stat-label">Anomalies Found</span>
+          </div>
+          <div className="global-stat">
+            <span className="global-stat-value" style={{ color: globalStats.avgRiskScore > 40 ? "var(--red)" : globalStats.avgRiskScore > 20 ? "var(--yellow)" : "var(--green)" }}>
+              {globalStats.avgRiskScore}
+            </span>
+            <span className="global-stat-label">Avg Risk Score</span>
+          </div>
+        </div>
+      )}
+
       <div className="page-header">
         <h1>Projects</h1>
         <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-          + Import Project
+          + Import Repository
         </button>
       </div>
 
       {showForm && (
-        <div className="card" style={{ marginBottom: 20 }}>
-          <h3>Connect Repository</h3>
-          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        <div className="card import-card" style={{ marginBottom: 20 }}>
+          <h3>Connect Public Repository</h3>
+          <p className="muted" style={{ margin: "4px 0 12px" }}>
+            Paste any public GitHub repository URL. DepGuard will clone, analyze dependencies, and run ML anomaly detection.
+          </p>
+          <div style={{ display: "flex", gap: 8 }}>
             <input
               className="input"
-              placeholder="https://github.com/owner/repo"
+              placeholder="https://github.com/expressjs/express"
               value={repoUrl}
               onChange={(e) => setRepoUrl(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleAdd()}
             />
             <button className="btn btn-primary" onClick={handleAdd}>
-              Connect
+              Analyze
             </button>
           </div>
         </div>
@@ -68,24 +109,26 @@ export default function Dashboard() {
 
       <div className="project-grid">
         {projects.map((p) => (
-          <div className="card project-card" key={p.id}>
+          <div className={`card project-card ${p.status === "running" || p.status === "pending" ? "card-pulse" : ""}`} key={p.id}>
             <div className="project-card-header">
               <Link to={`/project/${p.id}`} className="project-name">
+                <span className="eco-icon">{ecoIcon(p.ecosystem)}</span>
                 {p.name}
               </Link>
-              <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(p.id)}>
-                ×
-              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(p.id)}>×</button>
             </div>
             <div className="project-meta">
               <span className="branch-badge">{p.branch}</span>
               <span className="eco-badge">{p.ecosystem}</span>
+              {(p.status === "running" || p.status === "pending") && (
+                <span className="badge badge-yellow pulse-badge">⟳ Scanning...</span>
+              )}
             </div>
             <div className="project-status-row">
-              <span className="status-dot" style={{ background: statusColor(p.status) }} />
+              <span className={`status-dot ${p.status === "running" ? "status-dot-pulse" : ""}`} style={{ background: statusColor(p.status) }} />
               <span>{p.status}</span>
               <span style={{ marginLeft: "auto", color: riskColor(p.riskLevel), fontWeight: 600 }}>
-                {p.riskLevel} risk
+                {p.riskLevel !== "unknown" ? `${p.riskLevel} risk` : "—"}
               </span>
             </div>
             <div className="project-footer">
@@ -96,11 +139,22 @@ export default function Dashboard() {
                 <Link to={`/project/${p.id}`}>Pipelines</Link>
                 <Link to={`/project/${p.id}/tree`}>Tree</Link>
                 <Link to={`/project/${p.id}/risk`}>Risk</Link>
+                <Link to={`/project/${p.id}/ml`}>ML</Link>
+                <Link to={`/project/${p.id}/graph`}>Graph</Link>
               </div>
             </div>
           </div>
         ))}
       </div>
+
+      {projects.length === 0 && (
+        <div className="empty-state">
+          <span className="empty-icon">🛡️</span>
+          <h2>No Projects Yet</h2>
+          <p className="muted">Import a public GitHub repository to start analyzing its supply chain.</p>
+          <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Import Repository</button>
+        </div>
+      )}
     </div>
   );
 }

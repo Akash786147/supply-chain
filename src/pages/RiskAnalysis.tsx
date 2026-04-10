@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { fetchRiskSummary, fetchRiskSignals } from "../api";
 import type { RiskSummary, RiskSignal } from "../types";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 export default function RiskAnalysis() {
   const { id } = useParams<{ id: string }>();
@@ -15,13 +16,13 @@ export default function RiskAnalysis() {
     fetchRiskSignals(projectId).then(setSignals);
   }, [projectId]);
 
-  if (!summary) return <div className="page">Loading risk analysis...</div>;
+  if (!summary) return <div className="page"><div className="loading-spinner" />Loading risk analysis...</div>;
 
   const filtered = filterSeverity === "all" ? signals : signals.filter((s) => s.severity === filterSeverity);
 
   const severityColor = (s: string) => {
     if (s === "critical") return "var(--red)";
-    if (s === "high") return "var(--red)";
+    if (s === "high") return "#f97316";
     if (s === "medium") return "var(--yellow)";
     return "var(--muted)";
   };
@@ -33,6 +34,16 @@ export default function RiskAnalysis() {
     return "var(--muted)";
   };
 
+  // Mini chart data for signal distribution
+  const signalTypes = new Map<string, number>();
+  signals.forEach((s) => {
+    signalTypes.set(s.signal, (signalTypes.get(s.signal) || 0) + 1);
+  });
+  const signalChartData = Array.from(signalTypes.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+
   return (
     <div className="page">
       <div className="breadcrumb">
@@ -41,15 +52,16 @@ export default function RiskAnalysis() {
       </div>
 
       <div className="page-header">
-        <h1>Risk Analysis</h1>
-        <Link to={`/project/${projectId}/tree`} className="btn">
-          View Dependency Tree
-        </Link>
+        <h1>⚠ Risk Analysis</h1>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Link to={`/project/${projectId}/ml`} className="btn">🧠 ML Analysis</Link>
+          <Link to={`/project/${projectId}/tree`} className="btn">🌲 Dep Tree</Link>
+        </div>
       </div>
 
       {/* Overview cards */}
       <div className="risk-overview">
-        <div className="card risk-score-card">
+        <div className="card risk-score-card glass-card">
           <div className="risk-score-big" style={{ color: riskColor(summary.overallRiskLevel) }}>
             {summary.overallRiskScore}
           </div>
@@ -72,7 +84,7 @@ export default function RiskAnalysis() {
             <span>Critical: {summary.signalCounts.critical}</span>
           </div>
           <div className="severity-row">
-            <span className="severity-dot" style={{ background: "var(--red)" }} />
+            <span className="severity-dot" style={{ background: "#f97316" }} />
             <span>High: {summary.signalCounts.high}</span>
           </div>
           <div className="severity-row">
@@ -85,6 +97,29 @@ export default function RiskAnalysis() {
           </div>
         </div>
       </div>
+
+      {/* Signal Distribution Mini Chart */}
+      {signalChartData.length > 0 && (
+        <div className="card" style={{ marginTop: 24 }}>
+          <h3>Signal Type Distribution</h3>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={signalChartData}>
+              <XAxis dataKey="name" stroke="#666" fontSize={10} angle={-20} textAnchor="end" height={50} />
+              <YAxis stroke="#666" fontSize={11} />
+              <Tooltip contentStyle={{ background: "#141414", border: "1px solid #262626", borderRadius: 8, color: "#ededed" }} />
+              <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                {signalChartData.map((entry, i) => {
+                  const c = ["deprecated", "known-vulnerability"].includes(entry.name) ? "#ef4444"
+                    : ["unmaintained", "no-repository"].includes(entry.name) ? "#f97316"
+                    : ["outdated", "few-maintainers"].includes(entry.name) ? "#eab308"
+                    : "#3b82f6";
+                  return <Cell key={i} fill={c} fillOpacity={0.8} />;
+                })}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       {/* Signals table */}
       <div style={{ marginTop: 24 }}>
@@ -112,7 +147,10 @@ export default function RiskAnalysis() {
           </div>
           {filtered.map((sig, i) => (
             <div className="signals-table-row" key={i}>
-              <span className="signal-package">{sig.package}</span>
+              <span className="signal-package">
+                {sig.package}
+                {sig.isAnomaly && <span className="ml-badge">ML</span>}
+              </span>
               <span className="signal-name">{sig.signal}</span>
               <span className="signal-severity" style={{ color: severityColor(sig.severity) }}>
                 {sig.severity}

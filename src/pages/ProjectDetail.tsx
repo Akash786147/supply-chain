@@ -15,18 +15,25 @@ export default function ProjectDetail() {
     fetchPipelines(projectId).then(setPipelines);
   }, [projectId]);
 
+  // Poll for updates while scanning
+  useEffect(() => {
+    if (!scanning) return;
+    const interval = setInterval(async () => {
+      const proj = await fetchProject(projectId);
+      setProject(proj);
+      const pls = await fetchPipelines(projectId);
+      setPipelines(pls.reverse());
+      if (proj.status === "success" || proj.status === "failed") {
+        setScanning(false);
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [scanning, projectId]);
+
   const handleScan = async () => {
     setScanning(true);
     const p = await triggerScan(projectId);
     setPipelines((prev) => [p, ...prev]);
-    // Re-fetch after pipeline completes
-    setTimeout(async () => {
-      const updated = await fetchPipelines(projectId);
-      setPipelines(updated.reverse());
-      const proj = await fetchProject(projectId);
-      setProject(proj);
-      setScanning(false);
-    }, 4000);
   };
 
   const statusIcon = (s: string) => {
@@ -34,6 +41,7 @@ export default function ProjectDetail() {
     if (s === "failed") return "✗";
     if (s === "running") return "◌";
     if (s === "pending") return "○";
+    if (s === "skipped") return "—";
     return "·";
   };
 
@@ -51,7 +59,7 @@ export default function ProjectDetail() {
     return <span className="badge">PENDING</span>;
   };
 
-  if (!project) return <div className="page">Loading...</div>;
+  if (!project) return <div className="page"><div className="loading-spinner" />Loading...</div>;
 
   return (
     <div className="page">
@@ -69,14 +77,13 @@ export default function ProjectDetail() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <Link to={`/project/${project.id}/tree`} className="btn">
-            Dependency Tree
-          </Link>
-          <Link to={`/project/${project.id}/risk`} className="btn">
-            Risk Analysis
-          </Link>
+          <Link to={`/project/${project.id}/tree`} className="btn">🌲 Tree</Link>
+          <Link to={`/project/${project.id}/risk`} className="btn">⚠ Risk</Link>
+          <Link to={`/project/${project.id}/ml`} className="btn">🧠 ML</Link>
+          <Link to={`/project/${project.id}/graph`} className="btn">🕸️ Graph</Link>
+          <Link to={`/project/${project.id}/history`} className="btn">📊 History</Link>
           <button className="btn btn-primary" onClick={handleScan} disabled={scanning}>
-            {scanning ? "Scanning..." : "▶ Run Scan"}
+            {scanning ? "⟳ Scanning..." : "▶ Run Scan"}
           </button>
         </div>
       </div>
@@ -85,7 +92,7 @@ export default function ProjectDetail() {
       <div className="pipeline-list">
         {pipelines.length === 0 && <p className="muted">No pipelines yet. Run a scan to start.</p>}
         {pipelines.map((pl) => (
-          <div className="card pipeline-card" key={pl.id}>
+          <div className={`card pipeline-card ${pl.status === "running" ? "card-pulse" : ""}`} key={pl.id}>
             <div className="pipeline-header">
               <div>
                 <span className="pipeline-id">#{pl.id}</span>
@@ -100,7 +107,7 @@ export default function ProjectDetail() {
 
             <div className="pipeline-steps">
               {pl.steps.map((step, i) => (
-                <div className="pipeline-step" key={i}>
+                <div className={`pipeline-step ${step.status === "running" ? "step-running" : ""}`} key={i}>
                   <span className="step-icon" style={{ color: statusColor(step.status) }}>
                     {statusIcon(step.status)}
                   </span>
