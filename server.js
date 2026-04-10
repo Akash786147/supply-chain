@@ -1,18 +1,45 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import fs from "fs-extra";
 import path from "path";
-import { cloneAndAnalyze } from "./utils/analyzer.js";
+import { cloneAndAnalyze, flattenForDb, countNodes, countSignals } from "./utils/analyzer.js";
+import {
+  getDb,
+  dbSaveProject,
+  dbUpdateProject,
+  dbGetProjects,
+  dbGetProject,
+  dbDeleteProject,
+  dbSaveScan,
+  dbGetScansForProject,
+  dbGetLatestScanForProject,
+  dbGetGlobalStats,
+} from "./utils/db.js";
+import {
+  flattenToFeatureMatrix,
+  calculateDatasetStats,
+  generateRiskDistribution,
+  calculateCorrelationMatrix,
+  convertToCSV,
+  prepareMlStats,
+} from "./utils/dataset_exporter.js";
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 
+// ─── Initialize DB ───────────────────────────────────────────────────────────
+const db = getDb();
+if (db) {
+  console.log("[Server] Database connected.");
+} else {
+  console.warn("[Server] Running without database. Set DATABASE_URL in .env to enable persistence.");
+}
 
+// ─── In-memory fallback (for when DB is not available) ───────────────────────
 let nextProjectId = 4;
-let nextPipelineId = 100;
-
-const projects = [
+const inMemoryProjects = [
   {
     id: 1,
     name: "my-ecommerce-app",
@@ -48,21 +75,82 @@ const projects = [
   },
 ];
 
+// ─── Mock dependency trees (fallback) ────────────────────────────────────────
+const dependencyTrees = {
+  1: {
+    id: "my-ecommerce-app", name: "my-ecommerce-app", version: "1.0.0",
+    riskScore: 35, riskLevel: "medium",
+    children: [
+      {
+        id: "react", name: "react", version: "18.2.0", riskScore: 5, riskLevel: "low", signals: [], children: [
+          {
+            id: "loose-envify", name: "loose-envify", version: "1.4.0", riskScore: 8, riskLevel: "low", signals: ["outdated"], children: [
+              { id: "js-tokens", name: "js-tokens", version: "4.0.0", riskScore: 3, riskLevel: "low", signals: [], children: [] },
+            ]
+          },
+        ]
+      },
+      {
+        id: "express", name: "express", version: "4.19.2", riskScore: 12, riskLevel: "low", signals: [], children: [
+          { id: "body-parser", name: "body-parser", version: "1.20.2", riskScore: 10, riskLevel: "low", signals: [], children: [] },
+          { id: "path-to-regexp", name: "path-to-regexp", version: "0.1.7", riskScore: 42, riskLevel: "medium", signals: ["outdated", "few-maintainers", "known-vulnerability"], children: [] },
+        ]
+      },
+      { id: "lodash.includes", name: "lodash.includes", version: "4.3.0", riskScore: 55, riskLevel: "high", signals: ["deprecated", "unmaintained", "few-maintainers"], children: [] },
+    ],
+  },
+  2: {
+    id: "payment-service", name: "payment-service", version: "2.1.0",
+    riskScore: 68, riskLevel: "high",
+    children: [
+      { id: "crypto-js", name: "crypto-js", version: "4.1.1", riskScore: 72, riskLevel: "high", signals: ["known-vulnerability", "unmaintained", "deprecated"], children: [] },
+      {
+        id: "axios", name: "axios", version: "0.21.1", riskScore: 60, riskLevel: "high", signals: ["known-vulnerability", "outdated"], children: [
+          { id: "follow-redirects", name: "follow-redirects", version: "1.14.0", riskScore: 65, riskLevel: "high", signals: ["known-vulnerability"], children: [] },
+        ]
+      },
+    ],
+  },
+  3: {
+    id: "dashboard-ui", name: "dashboard-ui", version: "0.5.0",
+    riskScore: 15, riskLevel: "low",
+    children: [
+      { id: "react-3", name: "react", version: "19.0.0", riskScore: 3, riskLevel: "low", signals: [], children: [] },
+      { id: "zustand", name: "zustand", version: "5.0.0", riskScore: 6, riskLevel: "low", signals: [], children: [] },
+      { id: "vite-3", name: "vite", version: "6.0.0", riskScore: 4, riskLevel: "low", signals: [], children: [] },
+    ],
+  },
+};
+
+const riskSignals = {
+  1: [
+    { package: "lodash.includes", signal: "deprecated", severity: "high", description: "Package is deprecated by maintainer" },
+    { package: "lodash.includes", signal: "unmaintained", severity: "high", description: "No updates in over 3 years" },
+    { package: "path-to-regexp", signal: "known-vulnerability", severity: "high", description: "CVE-2024-45296: ReDoS vulnerability" },
+    { package: "path-to-regexp", signal: "outdated", severity: "medium", description: "Current: 0.1.7, Latest: 8.0.0" },
+  ],
+  2: [
+    { package: "crypto-js", signal: "known-vulnerability", severity: "critical", description: "CVE-2023-46233: PBKDF2 weakness" },
+    { package: "crypto-js", signal: "unmaintained", severity: "high", description: "Archived by maintainer" },
+    { package: "axios", signal: "known-vulnerability", severity: "high", description: "CVE-2023-45857: CSRF token exposure" },
+    { package: "follow-redirects", signal: "known-vulnerability", severity: "high", description: "CVE-2024-28849: Authorization header leak" },
+  ],
+  3: [
+    { package: "vite", signal: "info", severity: "low", description: "All dependencies up to date" },
+  ],
+};
+
+let nextPipelineId = 100;
 const pipelines = [
   {
-    id: 1,
-    projectId: 1,
-    trigger: "push",
-    branch: "main",
-    commit: "a1b2c3d",
-    status: "success",
+    id: 1, projectId: 1, trigger: "push", branch: "main", commit: "a1b2c3d", status: "success",
     steps: [
       { name: "Clone & Install", status: "success", duration: "12s" },
       { name: "SBOM Generation", status: "success", duration: "8s" },
       { name: "Dependency Extraction", status: "success", duration: "3s" },
       { name: "Graph Construction", status: "success", duration: "2s" },
       { name: "Risk Signal Analysis", status: "success", duration: "15s" },
-      { name: "Score Computation", status: "success", duration: "4s" },
+      { name: "ML Anomaly Detection", status: "success", duration: "6s" },
       { name: "Report Generation", status: "success", duration: "2s" },
     ],
     riskSummary: { critical: 0, high: 2, medium: 5, low: 12 },
@@ -70,351 +158,53 @@ const pipelines = [
     startedAt: "2026-03-12T08:30:00Z",
     finishedAt: "2026-03-12T08:31:06Z",
   },
-  {
-    id: 2,
-    projectId: 1,
-    trigger: "push",
-    branch: "main",
-    commit: "e4f5g6h",
-    status: "success",
-    steps: [
-      { name: "Clone & Install", status: "success", duration: "11s" },
-      { name: "SBOM Generation", status: "success", duration: "7s" },
-      { name: "Dependency Extraction", status: "success", duration: "3s" },
-      { name: "Graph Construction", status: "success", duration: "2s" },
-      { name: "Risk Signal Analysis", status: "success", duration: "14s" },
-      { name: "Score Computation", status: "success", duration: "3s" },
-      { name: "Report Generation", status: "success", duration: "2s" },
-    ],
-    riskSummary: { critical: 0, high: 1, medium: 4, low: 10 },
-    decision: "pass",
-    startedAt: "2026-03-11T15:20:00Z",
-    finishedAt: "2026-03-11T15:21:02Z",
-  },
-  {
-    id: 3,
-    projectId: 2,
-    trigger: "push",
-    branch: "main",
-    commit: "x9y8z7w",
-    status: "failed",
-    steps: [
-      { name: "Clone & Install", status: "success", duration: "14s" },
-      { name: "SBOM Generation", status: "success", duration: "9s" },
-      { name: "Dependency Extraction", status: "success", duration: "4s" },
-      { name: "Graph Construction", status: "success", duration: "2s" },
-      { name: "Risk Signal Analysis", status: "success", duration: "18s" },
-      { name: "Score Computation", status: "success", duration: "5s" },
-      { name: "Report Generation", status: "failed", duration: "1s" },
-    ],
-    riskSummary: { critical: 2, high: 5, medium: 8, low: 6 },
-    decision: "block",
-    startedAt: "2026-03-12T07:00:00Z",
-    finishedAt: "2026-03-12T07:01:13Z",
-  },
 ];
 
-// Full dependency trees per project
-const dependencyTrees = {
-  1: {
-    id: "my-ecommerce-app",
-    name: "my-ecommerce-app",
-    version: "1.0.0",
-    riskScore: 35,
-    riskLevel: "medium",
-    children: [
-      {
-        id: "react",
-        name: "react",
-        version: "18.2.0",
-        riskScore: 5,
-        riskLevel: "low",
-        signals: [],
-        children: [
-          {
-            id: "loose-envify",
-            name: "loose-envify",
-            version: "1.4.0",
-            riskScore: 8,
-            riskLevel: "low",
-            signals: ["outdated"],
-            children: [
-              { id: "js-tokens", name: "js-tokens", version: "4.0.0", riskScore: 3, riskLevel: "low", signals: [], children: [] },
-            ],
-          },
-        ],
-      },
-      {
-        id: "express",
-        name: "express",
-        version: "4.19.2",
-        riskScore: 12,
-        riskLevel: "low",
-        signals: [],
-        children: [
-          {
-            id: "body-parser",
-            name: "body-parser",
-            version: "1.20.2",
-            riskScore: 10,
-            riskLevel: "low",
-            signals: [],
-            children: [
-              { id: "bytes", name: "bytes", version: "3.1.2", riskScore: 4, riskLevel: "low", signals: [], children: [] },
-              { id: "raw-body", name: "raw-body", version: "2.5.2", riskScore: 6, riskLevel: "low", signals: [], children: [] },
-            ],
-          },
-          {
-            id: "cookie",
-            name: "cookie",
-            version: "0.6.0",
-            riskScore: 15,
-            riskLevel: "low",
-            signals: ["few-maintainers"],
-            children: [],
-          },
-          {
-            id: "path-to-regexp",
-            name: "path-to-regexp",
-            version: "0.1.7",
-            riskScore: 42,
-            riskLevel: "medium",
-            signals: ["outdated", "few-maintainers", "known-vulnerability"],
-            children: [],
-          },
-        ],
-      },
-      {
-        id: "jsonwebtoken",
-        name: "jsonwebtoken",
-        version: "9.0.2",
-        riskScore: 20,
-        riskLevel: "low",
-        signals: [],
-        children: [
-          {
-            id: "jws",
-            name: "jws",
-            version: "3.2.2",
-            riskScore: 25,
-            riskLevel: "medium",
-            signals: ["outdated"],
-            children: [
-              { id: "jwa", name: "jwa", version: "1.4.1", riskScore: 18, riskLevel: "low", signals: ["outdated"], children: [] },
-              {
-                id: "safe-buffer",
-                name: "safe-buffer",
-                version: "5.2.1",
-                riskScore: 10,
-                riskLevel: "low",
-                signals: [],
-                children: [],
-              },
-            ],
-          },
-          {
-            id: "lodash.includes",
-            name: "lodash.includes",
-            version: "4.3.0",
-            riskScore: 55,
-            riskLevel: "high",
-            signals: ["deprecated", "unmaintained", "micro-package"],
-            children: [],
-          },
-        ],
-      },
-      {
-        id: "stripe",
-        name: "stripe",
-        version: "14.12.0",
-        riskScore: 8,
-        riskLevel: "low",
-        signals: [],
-        children: [
-          { id: "qs", name: "qs", version: "6.11.0", riskScore: 7, riskLevel: "low", signals: [], children: [] },
-          {
-            id: "node-fetch",
-            name: "node-fetch",
-            version: "2.7.0",
-            riskScore: 30,
-            riskLevel: "medium",
-            signals: ["outdated", "known-vulnerability"],
-            children: [
-              {
-                id: "whatwg-url",
-                name: "whatwg-url",
-                version: "5.0.0",
-                riskScore: 22,
-                riskLevel: "medium",
-                signals: ["outdated"],
-                children: [],
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  },
-  2: {
-    id: "payment-service",
-    name: "payment-service",
-    version: "2.1.0",
-    riskScore: 68,
-    riskLevel: "high",
-    children: [
-      {
-        id: "express-2",
-        name: "express",
-        version: "4.17.1",
-        riskScore: 45,
-        riskLevel: "medium",
-        signals: ["outdated", "known-vulnerability"],
-        children: [
-          {
-            id: "qs-2",
-            name: "qs",
-            version: "6.7.0",
-            riskScore: 52,
-            riskLevel: "high",
-            signals: ["known-vulnerability", "outdated"],
-            children: [],
-          },
-        ],
-      },
-      {
-        id: "crypto-js",
-        name: "crypto-js",
-        version: "4.1.1",
-        riskScore: 72,
-        riskLevel: "high",
-        signals: ["known-vulnerability", "unmaintained", "deprecated"],
-        children: [],
-      },
-      {
-        id: "axios",
-        name: "axios",
-        version: "0.21.1",
-        riskScore: 60,
-        riskLevel: "high",
-        signals: ["known-vulnerability", "outdated"],
-        children: [
-          {
-            id: "follow-redirects",
-            name: "follow-redirects",
-            version: "1.14.0",
-            riskScore: 65,
-            riskLevel: "high",
-            signals: ["known-vulnerability"],
-            children: [],
-          },
-        ],
-      },
-      {
-        id: "uuid-2",
-        name: "uuid",
-        version: "9.0.0",
-        riskScore: 5,
-        riskLevel: "low",
-        signals: [],
-        children: [],
-      },
-    ],
-  },
-  3: {
-    id: "dashboard-ui",
-    name: "dashboard-ui",
-    version: "0.5.0",
-    riskScore: 15,
-    riskLevel: "low",
-    children: [
-      {
-        id: "react-3",
-        name: "react",
-        version: "19.0.0",
-        riskScore: 3,
-        riskLevel: "low",
-        signals: [],
-        children: [
-          {
-            id: "react-dom-3",
-            name: "react-dom",
-            version: "19.0.0",
-            riskScore: 3,
-            riskLevel: "low",
-            signals: [],
-            children: [{ id: "scheduler", name: "scheduler", version: "0.25.0", riskScore: 3, riskLevel: "low", signals: [], children: [] }],
-          },
-        ],
-      },
-      {
-        id: "zustand",
-        name: "zustand",
-        version: "5.0.0",
-        riskScore: 6,
-        riskLevel: "low",
-        signals: [],
-        children: [],
-      },
-      {
-        id: "vite-3",
-        name: "vite",
-        version: "6.0.0",
-        riskScore: 4,
-        riskLevel: "low",
-        signals: [],
-        children: [
-          { id: "esbuild", name: "esbuild", version: "0.24.0", riskScore: 5, riskLevel: "low", signals: [], children: [] },
-          { id: "rollup", name: "rollup", version: "4.28.0", riskScore: 4, riskLevel: "low", signals: [], children: [] },
-        ],
-      },
-    ],
-  },
-};
-
-// Risk signals database per project
-const riskSignals = {
-  1: [
-    { package: "lodash.includes", signal: "deprecated", severity: "high", description: "Package is deprecated by maintainer" },
-    { package: "lodash.includes", signal: "unmaintained", severity: "high", description: "No updates in over 3 years" },
-    { package: "lodash.includes", signal: "micro-package", severity: "medium", description: "Single-function package — high supply chain risk" },
-    { package: "path-to-regexp", signal: "known-vulnerability", severity: "high", description: "CVE-2024-45296: ReDoS vulnerability" },
-    { package: "path-to-regexp", signal: "outdated", severity: "medium", description: "Current: 0.1.7, Latest: 8.0.0" },
-    { package: "node-fetch", signal: "known-vulnerability", severity: "medium", description: "CVE-2022-0235: Information exposure" },
-    { package: "node-fetch", signal: "outdated", severity: "low", description: "v2 branch, v3 available" },
-    { package: "whatwg-url", signal: "outdated", severity: "low", description: "Current: 5.0.0, Latest: 14.0.0" },
-    { package: "loose-envify", signal: "outdated", severity: "low", description: "No longer needed with modern bundlers" },
-    { package: "jwa", signal: "outdated", severity: "low", description: "Last publish over 4 years ago" },
-    { package: "jws", signal: "outdated", severity: "low", description: "Last publish over 4 years ago" },
-    { package: "cookie", signal: "few-maintainers", severity: "low", description: "Only 1 maintainer" },
-    { package: "path-to-regexp", signal: "few-maintainers", severity: "low", description: "Only 1 maintainer" },
-  ],
-  2: [
-    { package: "crypto-js", signal: "known-vulnerability", severity: "critical", description: "CVE-2023-46233: PBKDF2 weakness" },
-    { package: "crypto-js", signal: "unmaintained", severity: "high", description: "Archived by maintainer" },
-    { package: "crypto-js", signal: "deprecated", severity: "high", description: "Maintainer recommends native crypto" },
-    { package: "axios", signal: "known-vulnerability", severity: "high", description: "CVE-2023-45857: CSRF token exposure" },
-    { package: "axios", signal: "outdated", severity: "medium", description: "Current: 0.21.1, Latest: 1.7.0" },
-    { package: "follow-redirects", signal: "known-vulnerability", severity: "high", description: "CVE-2024-28849: Authorization header leak" },
-    { package: "express", signal: "known-vulnerability", severity: "medium", description: "CVE-2024-29041: Open redirect" },
-    { package: "express", signal: "outdated", severity: "medium", description: "Current: 4.17.1, Latest: 4.21.0" },
-    { package: "qs", signal: "known-vulnerability", severity: "high", description: "CVE-2022-24999: Prototype pollution" },
-    { package: "qs", signal: "outdated", severity: "medium", description: "Current: 6.7.0, Latest: 6.13.0" },
-  ],
-  3: [
-    { package: "vite", signal: "info", severity: "low", description: "All dependencies up to date" },
-  ],
+// ─── Helper ──────────────────────────────────────────────────────────────────
+const collectSignals = (node, allSignals = []) => {
+  if (!node) return allSignals;
+  if (node.signals && node.signals.length > 0) {
+    node.signals.forEach((s) => {
+      if (typeof s === "string") {
+        allSignals.push({
+          package: node.name,
+          signal: s,
+          severity: s === "deprecated" || s === "known-vulnerability" ? "high" : s === "unmaintained" || s === "no-repository" ? "medium" : "low",
+          description: `Detected: ${s} in ${node.name}@${node.version || "?"}`,
+          isAnomaly: node.isAnomaly || false,
+          anomalyScore: node.anomalyScore || 0,
+        });
+      } else {
+        allSignals.push({ ...s, isAnomaly: node.isAnomaly || false, anomalyScore: node.anomalyScore || 0 });
+      }
+    });
+  }
+  if (node.children) {
+    node.children.forEach((child) => collectSignals(child, allSignals));
+  }
+  return allSignals;
 };
 
 // ─── API Routes ──────────────────────────────────────────────────────────────
 
 // GET all projects
-app.get("/api/projects", (_req, res) => {
-  res.json(projects);
+app.get("/api/projects", async (_req, res) => {
+  if (db) {
+    const rows = await dbGetProjects();
+    return res.json(rows);
+  }
+  res.json(inMemoryProjects);
 });
 
 // GET single project
-app.get("/api/projects/:id", (req, res) => {
-  const project = projects.find((p) => p.id === Number(req.params.id));
+app.get("/api/projects/:id", async (req, res) => {
+  const projectId = Number(req.params.id);
+  if (db) {
+    const row = await dbGetProject(projectId);
+    if (!row) return res.status(404).json({ error: "Project not found" });
+    return res.json(row);
+  }
+  const project = inMemoryProjects.find((p) => p.id === projectId);
   if (!project) return res.status(404).json({ error: "Project not found" });
   res.json(project);
 });
@@ -425,76 +215,124 @@ app.post("/api/projects", async (req, res) => {
   if (!repoUrl) return res.status(400).json({ error: "repoUrl is required" });
 
   const name = repoUrl.split("/").pop().replace(".git", "") || "unknown-repo";
-  const newProject = {
-    id: nextProjectId++,
+  const projectData = {
     name,
     repoUrl,
     branch: branch || "main",
     ecosystem: ecosystem || "npm",
     status: "pending",
     riskLevel: "unknown",
-    lastScanAt: null,
-    createdAt: new Date().toISOString(),
   };
 
-  projects.push(newProject);
+  let newProject;
+  if (db) {
+    newProject = await dbSaveProject(projectData);
+    if (!newProject) {
+      // fallback to in-memory
+      newProject = { id: nextProjectId++, ...projectData, lastScanAt: null, createdAt: new Date().toISOString() };
+    }
+  } else {
+    newProject = { id: nextProjectId++, ...projectData, lastScanAt: null, createdAt: new Date().toISOString() };
+    inMemoryProjects.push(newProject);
+  }
 
-  // Return immediately
   res.status(201).json(newProject);
 
   // Run analysis in background
-  console.log(`[Project ${newProject.id}] Starting analysis for ${repoUrl}...`);
+  const pid = newProject.id;
+  console.log(`[Server] Starting analysis for project ${pid}: ${repoUrl}`);
   try {
-    newProject.status = "running";
-    const tree = await cloneAndAnalyze(repoUrl, newProject.id);
+    if (db) await dbUpdateProject(pid, { status: "running" });
+    else newProject.status = "running";
 
-    // Update project metadata from result
-    newProject.status = "success";
-    newProject.lastScanAt = new Date().toISOString();
-    newProject.riskLevel = tree.riskLevel || "low";
+    const result = await cloneAndAnalyze(repoUrl, pid);
 
-    console.log(`[Project ${newProject.id}] Analysis completed.`);
+    const updates = {
+      status: "success",
+      lastScanAt: new Date(),
+      riskLevel: result.riskLevel || "low",
+      ecosystem: result.scanMeta?.ecosystem || "npm",
+    };
+
+    if (db) {
+      await dbUpdateProject(pid, updates);
+
+      // Save scan to DB
+      const flatPkgs = flattenForDb(result);
+      await dbSaveScan(
+        {
+          projectId: pid,
+          repoUrl,
+          ecosystem: result.scanMeta?.ecosystem || "npm",
+          overallRiskScore: result.riskScore || 0,
+          riskLevel: result.riskLevel || "low",
+          totalDeps: result.scanMeta?.totalDeps || 0,
+          totalSignals: result.scanMeta?.totalSignals || 0,
+          totalAnomalies: result.scanMeta?.totalAnomalies || 0,
+          scanDurationMs: result.scanMeta?.scanDurationMs || 0,
+          mlStats: result.mlStats || null,
+        },
+        flatPkgs
+      );
+    } else {
+      Object.assign(newProject, updates);
+    }
+
+    console.log(`[Server] ✓ Project ${pid} analysis completed.`);
   } catch (error) {
-    console.error(`[Project ${newProject.id}] Analysis failed:`, error);
-    newProject.status = "failed";
+    console.error(`[Server] ✗ Project ${pid} analysis failed:`, error.message);
+    if (db) await dbUpdateProject(pid, { status: "failed" });
+    else newProject.status = "failed";
   }
 });
 
 // DELETE project
-app.delete("/api/projects/:id", (req, res) => {
-  const idx = projects.findIndex((p) => p.id === Number(req.params.id));
-  if (idx === -1) return res.status(404).json({ error: "Project not found" });
-  projects.splice(idx, 1);
+app.delete("/api/projects/:id", async (req, res) => {
+  const projectId = Number(req.params.id);
+  if (db) {
+    await dbDeleteProject(projectId);
+  } else {
+    const idx = inMemoryProjects.findIndex((p) => p.id === projectId);
+    if (idx !== -1) inMemoryProjects.splice(idx, 1);
+  }
+  // Also remove data file
+  const dataFile = path.resolve("data", `${projectId}.json`);
+  if (await fs.pathExists(dataFile)) await fs.remove(dataFile);
   res.json({ ok: true });
 });
 
 // GET pipelines for a project
 app.get("/api/projects/:id/pipelines", (req, res) => {
   const projectId = Number(req.params.id);
-  const result = pipelines.filter((p) => p.projectId === projectId);
-  res.json(result);
+  res.json(pipelines.filter((p) => p.projectId === projectId));
 });
 
 // POST trigger a new scan/pipeline
-app.post("/api/projects/:id/scan", (req, res) => {
+app.post("/api/projects/:id/scan", async (req, res) => {
   const projectId = Number(req.params.id);
-  const project = projects.find((p) => p.id === projectId);
+
+  let project;
+  if (db) {
+    project = await dbGetProject(projectId);
+  } else {
+    project = inMemoryProjects.find((p) => p.id === projectId);
+  }
   if (!project) return res.status(404).json({ error: "Project not found" });
 
   const newPipeline = {
     id: nextPipelineId++,
     projectId,
     trigger: "manual",
-    branch: project.branch,
+    branch: project.branch || "main",
     commit: Math.random().toString(36).substring(2, 9),
     status: "running",
     steps: [
-      { name: "Clone & Install", status: "success", duration: "10s" },
-      { name: "SBOM Generation", status: "success", duration: "7s" },
-      { name: "Dependency Extraction", status: "running", duration: "..." },
+      { name: "Clone & Install", status: "running", duration: "..." },
+      { name: "SBOM Generation", status: "pending", duration: "-" },
+      { name: "Dependency Extraction", status: "pending", duration: "-" },
       { name: "Graph Construction", status: "pending", duration: "-" },
       { name: "Risk Signal Analysis", status: "pending", duration: "-" },
-      { name: "Score Computation", status: "pending", duration: "-" },
+      { name: "ML Anomaly Detection", status: "pending", duration: "-" },
       { name: "Report Generation", status: "pending", duration: "-" },
     ],
     riskSummary: null,
@@ -503,9 +341,12 @@ app.post("/api/projects/:id/scan", (req, res) => {
     finishedAt: null,
   };
   pipelines.push(newPipeline);
+  res.status(201).json(newPipeline);
 
-  // Simulate pipeline completion after 3 seconds
-  setTimeout(() => {
+  // Run real analysis in background
+  try {
+    const result = await cloneAndAnalyze(project.repoUrl, projectId);
+
     newPipeline.status = "success";
     newPipeline.finishedAt = new Date().toISOString();
     newPipeline.steps = newPipeline.steps.map((s) => ({
@@ -513,78 +354,76 @@ app.post("/api/projects/:id/scan", (req, res) => {
       status: "success",
       duration: Math.floor(Math.random() * 15 + 2) + "s",
     }));
-    newPipeline.riskSummary = { critical: 0, high: 1, medium: 3, low: 8 };
-    newPipeline.decision = "pass";
-    project.status = "success";
-    project.lastScanAt = new Date().toISOString();
-  }, 3000);
 
-  res.status(201).json(newPipeline);
+    const signals = collectSignals(result);
+    const counts = { critical: 0, high: 0, medium: 0, low: 0 };
+    signals.forEach((s) => {
+      if (counts[s.severity] !== undefined) counts[s.severity]++;
+    });
+    newPipeline.riskSummary = counts;
+    newPipeline.decision = counts.critical > 0 ? "block" : counts.high > 2 ? "warn" : "pass";
+
+    if (db) {
+      await dbUpdateProject(projectId, {
+        status: "success",
+        lastScanAt: new Date(),
+        riskLevel: result.riskLevel || "low",
+      });
+      const flatPkgs = flattenForDb(result);
+      await dbSaveScan(
+        {
+          projectId,
+          repoUrl: project.repoUrl,
+          ecosystem: result.scanMeta?.ecosystem || "npm",
+          overallRiskScore: result.riskScore || 0,
+          riskLevel: result.riskLevel || "low",
+          totalDeps: result.scanMeta?.totalDeps || 0,
+          totalSignals: result.scanMeta?.totalSignals || 0,
+          totalAnomalies: result.scanMeta?.totalAnomalies || 0,
+          scanDurationMs: result.scanMeta?.scanDurationMs || 0,
+          mlStats: result.mlStats || null,
+        },
+        flatPkgs
+      );
+    }
+  } catch (err) {
+    newPipeline.status = "failed";
+    newPipeline.finishedAt = new Date().toISOString();
+    newPipeline.steps = newPipeline.steps.map((s) => ({
+      ...s,
+      status: s.status === "pending" ? "skipped" : s.status === "running" ? "failed" : s.status,
+    }));
+    console.error(`[Server] Scan failed for project ${projectId}:`, err.message);
+  }
 });
 
 // GET dependency tree for a project
 app.get("/api/projects/:id/dependencies", async (req, res) => {
   const projectId = Number(req.params.id);
-
-  // 1. Try file
   const dataFile = path.resolve("data", `${projectId}.json`);
   if (await fs.pathExists(dataFile)) {
     return res.json(await fs.readJson(dataFile));
   }
-
-  // 2. Try mock data
   const tree = dependencyTrees[projectId];
   if (!tree) return res.status(404).json({ error: "No dependency data found. Try running a scan." });
   res.json(tree);
 });
 
-// Helper to collect all signals recursively
-const collectSignals = (node, allSignals = []) => {
-  if (!node) return allSignals;
-  if (node.signals && node.signals.length > 0) {
-    node.signals.forEach(s => {
-      // Check if signal is already formatted object or just string
-      if (typeof s === 'string') {
-        allSignals.push({
-          package: node.name,
-          signal: s,
-          severity: "medium", // default
-          description: `Detected ${s} in ${node.name}`
-        });
-      } else {
-        allSignals.push(s);
-      }
-    });
-  }
-  if (node.children) {
-    node.children.forEach(child => collectSignals(child, allSignals));
-  }
-  return allSignals;
-};
-
 // GET risk signals for a project
 app.get("/api/projects/:id/signals", async (req, res) => {
   const projectId = Number(req.params.id);
-
-  // 1. Try file
   const dataFile = path.resolve("data", `${projectId}.json`);
   if (await fs.pathExists(dataFile)) {
     const tree = await fs.readJson(dataFile);
-    const signals = collectSignals(tree);
-    return res.json(signals);
+    return res.json(collectSignals(tree));
   }
-
-  // 2. Fallback to mock signals
-  const signals = riskSignals[projectId] || [];
-  res.json(signals);
+  res.json(riskSignals[projectId] || []);
 });
 
 // GET risk summary for a project
 app.get("/api/projects/:id/risk", async (req, res) => {
   const projectId = Number(req.params.id);
-
-  let tree;
-  let signals;
+  let tree, signals;
 
   const dataFile = path.resolve("data", `${projectId}.json`);
   if (await fs.pathExists(dataFile)) {
@@ -594,40 +433,212 @@ app.get("/api/projects/:id/risk", async (req, res) => {
     tree = dependencyTrees[projectId];
     signals = riskSignals[projectId] || [];
   }
-
   if (!tree) return res.status(404).json({ error: "No data" });
 
-  // Count total deps
-  function countNodes(node) {
-    let count = 0;
-    for (const child of node.children || []) {
-      count += 1 + countNodes(child);
-    }
-    return count;
+  function countN(node) {
+    let c = 0;
+    for (const ch of node.children || []) c += 1 + countN(ch);
+    return c;
   }
 
-  const totalDeps = countNodes(tree);
   const severityCounts = { critical: 0, high: 0, medium: 0, low: 0 };
-
   signals.forEach((s) => {
-    // If signal is string (from our new analyzer), map to severity
-    let severity = "medium";
-    if (typeof s === 'object' && s.severity) severity = s.severity;
-
-    // For our generated signals, we don't have explicit severity in the string array
-    // so we might need to infer it or just count it as medium
-
-    if (severityCounts[severity] !== undefined) severityCounts[severity]++;
+    const sev = typeof s === "object" && s.severity ? s.severity : "medium";
+    if (severityCounts[sev] !== undefined) severityCounts[sev]++;
   });
 
   res.json({
     projectName: tree.name,
     overallRiskScore: tree.riskScore || 0,
     overallRiskLevel: tree.riskLevel || "unknown",
-    totalDependencies: totalDeps,
+    totalDependencies: countN(tree),
     signalCounts: severityCounts,
     totalSignals: signals.length,
   });
+});
+
+// GET ML stats for a project
+app.get("/api/projects/:id/ml-stats", async (req, res) => {
+  const projectId = Number(req.params.id);
+
+  // First try data file
+  const dataFile = path.resolve("data", `${projectId}.json`);
+  if (await fs.pathExists(dataFile)) {
+    const data = await fs.readJson(dataFile);
+    if (data.mlStats) return res.json(data.mlStats);
+  }
+
+  // Try DB
+  if (db) {
+    const scan = await dbGetLatestScanForProject(projectId);
+    if (scan && scan.mlStats) return res.json(scan.mlStats);
+  }
+
+  res.status(404).json({ error: "No ML stats available. Run a scan first." });
+});
+
+// GET scan history for a project
+app.get("/api/projects/:id/history", async (req, res) => {
+  const projectId = Number(req.params.id);
+  if (db) {
+    const scanHistory = await dbGetScansForProject(projectId);
+    return res.json(scanHistory);
+  }
+  res.json([]);
+});
+
+// GET global stats
+app.get("/api/stats/global", async (_req, res) => {
+  if (db) {
+    const stats = await dbGetGlobalStats();
+    return res.json(stats || { totalScans: 0, totalAnomalies: 0, avgRiskScore: 0, totalPackagesAnalyzed: 0 });
+  }
+  res.json({ totalScans: 0, totalAnomalies: 0, avgRiskScore: 0, totalPackagesAnalyzed: 0 });
+});
+
+// ─── Dataset Export Endpoints ────────────────────────────────────────────────
+
+// GET dataset for a project (feature matrix + stats)
+app.get("/api/projects/:id/dataset", async (req, res) => {
+  const projectId = Number(req.params.id);
+
+  // First try data file
+  const dataFile = path.resolve("data", `${projectId}.json`);
+  if (await fs.pathExists(dataFile)) {
+    const tree = await fs.readJson(dataFile);
+    const featureMatrix = flattenToFeatureMatrix(tree);
+    const stats = calculateDatasetStats(featureMatrix);
+
+    return res.json({
+      featureMatrix,
+      stats,
+      projectId,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  // Try DB
+  if (db) {
+    const scan = await dbGetLatestScanForProject(projectId);
+    if (scan && scan.mlStats && scan.mlStats.featureMatrix) {
+      const stats = calculateDatasetStats(scan.mlStats.featureMatrix);
+      return res.json({
+        featureMatrix: scan.mlStats.featureMatrix,
+        stats,
+        projectId,
+        timestamp: scan.created_at,
+      });
+    }
+  }
+
+  // Fallback to mock data
+  if (dependencyTrees[projectId]) {
+    const tree = dependencyTrees[projectId];
+    const featureMatrix = flattenToFeatureMatrix(tree);
+    const stats = calculateDatasetStats(featureMatrix);
+
+    return res.json({
+      featureMatrix,
+      stats,
+      projectId,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  res.status(404).json({ error: "No dataset available" });
+});
+
+// GET dataset stats for a project
+app.get("/api/projects/:id/dataset/stats", async (req, res) => {
+  const projectId = Number(req.params.id);
+
+  const dataFile = path.resolve("data", `${projectId}.json`);
+  if (await fs.pathExists(dataFile)) {
+    const tree = await fs.readJson(dataFile);
+    const featureMatrix = flattenToFeatureMatrix(tree);
+    const stats = calculateDatasetStats(featureMatrix);
+    const riskDistribution = generateRiskDistribution(featureMatrix);
+
+    return res.json({
+      stats,
+      riskDistribution,
+      totalPackages: featureMatrix.length,
+    });
+  }
+
+  // Fallback
+  if (dependencyTrees[projectId]) {
+    const tree = dependencyTrees[projectId];
+    const featureMatrix = flattenToFeatureMatrix(tree);
+    const stats = calculateDatasetStats(featureMatrix);
+    const riskDistribution = generateRiskDistribution(featureMatrix);
+
+    return res.json({
+      stats,
+      riskDistribution,
+      totalPackages: featureMatrix.length,
+    });
+  }
+
+  res.status(404).json({ error: "No dataset available" });
+});
+
+// GET dataset visualizations (correlation matrix, etc.)
+app.get("/api/projects/:id/dataset/correlations", async (req, res) => {
+  const projectId = Number(req.params.id);
+
+  const dataFile = path.resolve("data", `${projectId}.json`);
+  if (await fs.pathExists(dataFile)) {
+    const tree = await fs.readJson(dataFile);
+    const featureMatrix = flattenToFeatureMatrix(tree);
+    const correlations = calculateCorrelationMatrix(featureMatrix);
+
+    return res.json(correlations);
+  }
+
+  // Fallback
+  if (dependencyTrees[projectId]) {
+    const tree = dependencyTrees[projectId];
+    const featureMatrix = flattenToFeatureMatrix(tree);
+    const correlations = calculateCorrelationMatrix(featureMatrix);
+
+    return res.json(correlations);
+  }
+
+  res.status(404).json({ error: "No dataset available" });
+});
+
+// GET dataset export as CSV
+app.get("/api/projects/:id/dataset/export", async (req, res) => {
+  const projectId = Number(req.params.id);
+  const format = req.query.format || "csv";
+
+  const dataFile = path.resolve("data", `${projectId}.json`);
+  let featureMatrix;
+
+  if (await fs.pathExists(dataFile)) {
+    const tree = await fs.readJson(dataFile);
+    featureMatrix = flattenToFeatureMatrix(tree);
+  } else if (dependencyTrees[projectId]) {
+    featureMatrix = flattenToFeatureMatrix(dependencyTrees[projectId]);
+  } else {
+    return res.status(404).json({ error: "No dataset available" });
+  }
+
+  if (format === "csv") {
+    const csv = convertToCSV(featureMatrix);
+    const filename = `dataset_${projectId}_${new Date().toISOString().split("T")[0]}.csv`;
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(csv);
+  } else if (format === "json") {
+    const filename = `dataset_${projectId}_${new Date().toISOString().split("T")[0]}.json`;
+    res.setHeader("Content-Type", "application/json");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.json(featureMatrix);
+  } else {
+    res.status(400).json({ error: "Invalid format. Use 'csv' or 'json'" });
+  }
 });
 
 // GitHub webhook
@@ -642,5 +653,6 @@ app.post("/api/github-webhook", (req, res) => {
 
 const PORT = 3001;
 app.listen(PORT, () => {
-  console.log(`Supply Chain CI/CD Backend running on http://localhost:${PORT}`);
+  console.log(`\n🛡️  Supply Chain CI/CD Backend running on http://localhost:${PORT}`);
+  console.log(`   Database: ${db ? "✓ Connected (Supabase)" : "✗ Not connected (using in-memory)"}\n`);
 });
