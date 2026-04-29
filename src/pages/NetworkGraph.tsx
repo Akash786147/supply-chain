@@ -56,6 +56,18 @@ function flattenToGraph(node: DepNode, depth = 0, nodesMap: Map<string, GraphNod
   return { nodes: Array.from(nodesMap.values()), links };
 }
 
+const getNodeColor = (node: GraphNode) => {
+  if (node.isAnomaly) return "#ef4444";
+  if (node.riskScore > 60) return "#ef4444";
+  if (node.riskScore > 40) return "#f97316";
+  if (node.riskScore > 20) return "#eab308";
+  return "#22c55e";
+};
+
+const getNodeRadius = (node: GraphNode) => {
+  return Math.max(4, Math.min(18, 5 + (node.blastRadius || 0) * 0.8 + (node.depth === 0 ? 8 : 0)));
+};
+
 export default function NetworkGraph() {
   const { id } = useParams<{ id: string }>();
   const projectId = Number(id);
@@ -74,18 +86,6 @@ export default function NetworkGraph() {
   useEffect(() => {
     fetchDependencyTree(projectId).then(setTree);
   }, [projectId]);
-
-  const getNodeColor = (node: GraphNode) => {
-    if (node.isAnomaly) return "#ef4444";
-    if (node.riskScore > 60) return "#ef4444";
-    if (node.riskScore > 40) return "#f97316";
-    if (node.riskScore > 20) return "#eab308";
-    return "#22c55e";
-  };
-
-  const getNodeRadius = (node: GraphNode) => {
-    return Math.max(4, Math.min(18, 5 + (node.blastRadius || 0) * 0.8 + (node.depth === 0 ? 8 : 0)));
-  };
 
   // Force simulation + continuous redraw
   useEffect(() => {
@@ -132,7 +132,7 @@ export default function NetworkGraph() {
       ctx.scale(t.scale, t.scale);
 
       // Draw edges
-      ctx.strokeStyle = "rgba(100, 100, 100, 0.3)";
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.6)";
       ctx.lineWidth = 0.5;
       links.forEach((l) => {
         const a = nodes.find((n) => n.id === l.source);
@@ -164,13 +164,13 @@ export default function NetworkGraph() {
         ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
         ctx.fillStyle = color;
         ctx.fill();
-        ctx.strokeStyle = n.isAnomaly ? "#ef4444" : "rgba(255,255,255,0.2)";
+        ctx.strokeStyle = n.isAnomaly ? "#ef4444" : "rgba(0,0,0,0.15)";
         ctx.lineWidth = n.isAnomaly ? 2 : 0.5;
         ctx.stroke();
 
         // Label for important nodes
         if (n.depth <= 1 || n.isAnomaly || r > 8) {
-          ctx.fillStyle = "#ccc";
+          ctx.fillStyle = "#475569";
           ctx.font = `${Math.max(9, 11 - n.depth)}px Inter, sans-serif`;
           ctx.textAlign = "center";
           ctx.fillText(n.name, n.x, n.y + r + 12);
@@ -326,7 +326,7 @@ export default function NetworkGraph() {
       canvas.removeEventListener("mouseup", handleMouseUp);
       canvas.removeEventListener("mouseleave", handleMouseUp);
     };
-  }, [getNodeRadius]);
+  }, [tree]);
 
   if (!tree) return <div className="page"><div className="loading-spinner" />Loading network graph...</div>;
 
