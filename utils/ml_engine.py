@@ -31,9 +31,9 @@ def flatten_tree(node, depth=0, parent=None, nodes=None, edges=None):
         "version": node.get("version", "0.0.0"),
         "depth": depth,
         "riskScore": node.get("riskScore", 0),
-        "maintainerCount": node.get("maintainerCount", 1),
-        "ageDays": node.get("ageDays", 365),
-        "daysSinceUpdate": node.get("daysSinceUpdate", 30),
+        "maintainerCount": node.get("maintainerCount"),
+        "ageDays": node.get("ageDays"),
+        "daysSinceUpdate": node.get("daysSinceUpdate"),
         "downloadCount": node.get("downloadCount", 1000),
         "signals": node.get("signals", []),
         "riskLevel": node.get("riskLevel", "low"),
@@ -91,43 +91,47 @@ def compute_graph_metrics(nodes, edges):
 
 
 def run_isolation_forest(nodes):
-    """Run Isolation Forest anomaly detection on package features."""
-    if len(nodes) < 5:
-        # Too few samples for meaningful ML
+    """Flag statistical outliers; this is not a vulnerability classifier."""
+    model_nodes = [node for node in nodes if node.get("depth", 0) > 0]
+    minimum_samples = 20
+    feature_names = ["maintainerCount", "ageDays", "daysSinceUpdate", "depth", "blastRadius", "pagerank", "centrality"]
+    if len(model_nodes) < minimum_samples:
+        # Do not manufacture a model result from a tiny package sample.
         for node in nodes:
             node["anomalyScore"] = 0.0
             node["isAnomaly"] = False
-        return nodes
-    
-    # Extract feature matrix
-    feature_names = ["maintainerCount", "ageDays", "daysSinceUpdate", "depth", 
-                     "blastRadius", "pagerank", "centrality", "riskScore"]
-    
-    X = []
-    for node in nodes:
-        row = [
-            node.get("maintainerCount", 1),
-            node.get("ageDays", 365),
-            node.get("daysSinceUpdate", 30),
-            node.get("depth", 0),
-            node.get("blastRadius", 0),
-            node.get("pagerank", 0),
-            node.get("centrality", 0),
-            node.get("riskScore", 0),
-        ]
-        X.append(row)
-    
-    X = np.array(X, dtype=np.float64)
-    
-    # Handle NaN/Inf
-    X = np.nan_to_num(X, nan=0.0, posinf=1e6, neginf=-1e6)
+            node["anomalyReasons"] = []
+        feature_matrix = [{
+            "name": node["name"], "version": node["version"],
+            **{key: node.get(key) for key in feature_names}, "riskScore": node.get("riskScore", 0),
+            "anomalyScore": 0.0, "isAnomaly": False, "anomalyReasons": [],
+        } for node in model_nodes]
+        return nodes, {
+            "featureNames": feature_names, "featureMatrix": feature_matrix, "correlationMatrix": [],
+            "featureImportances": {}, "riskDistribution": [], "totalAnomalies": 0,
+            "totalPackages": len(model_nodes),
+            "evaluation": {"method": "Isolation Forest outlier screening", "labelledGroundTruthAvailable": False,
+                           "status": "insufficient-samples", "minimumSamples": minimum_samples, "scoredSamples": len(model_nodes)},
+        }
+
+    # Use measured package attributes and graph values. Missing registry data is
+    # median-imputed instead of being replaced with invented package defaults.
+    raw = np.array([[node.get(name) if isinstance(node.get(name), (int, float)) and math.isfinite(node.get(name)) else np.nan
+                     for name in feature_names] for node in model_nodes], dtype=np.float64)
+    observed_values = np.isfinite(raw)
+    coverage = {name: round(float(np.isfinite(raw[:, index]).mean()), 3) for index, name in enumerate(feature_names)}
+    medians = np.array([np.nanmedian(raw[:, index]) if np.isfinite(raw[:, index]).any() else 0.0
+                        for index in range(raw.shape[1])])
+    missing_rows, missing_columns = np.where(~np.isfinite(raw))
+    raw[missing_rows, missing_columns] = medians[missing_columns]
+    X = np.nan_to_num(raw, nan=0.0, posinf=1e6, neginf=-1e6)
     
     # Scale features
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
     
     # Isolation Forest
-    contamination = min(0.1, max(0.01, 3.0 / len(nodes)))
+    contamination = min(0.08, max(0.02, 3.0 / len(model_nodes)))
     clf = IsolationForest(
         n_estimators=100,
         contamination=contamination,
@@ -137,39 +141,40 @@ def run_isolation_forest(nodes):
     scores = clf.decision_function(X_scaled)
     
     # Normalize anomaly scores to 0-1 range (higher = more anomalous)
-    scores_normalized = 1 - (scores - scores.min()) / (scores.max() - scores.min() + 1e-8)
+    score_spread = float(scores.max() - scores.min())
+    scores_normalized = np.zeros_like(scores) if score_spread < 1e-8 else 1 - (scores - scores.min()) / score_spread
     
-    for i, node in enumerate(nodes):
+    # Explanations describe unusually high/low observed feature values; they are not
+    # feature-importance claims (Isolation Forest does not expose that metric).
+    feature_scales = np.std(X, axis=0) + 1e-8
+    feature_descriptions = {
+        "maintainerCount": "unusually few or many maintainers",
+        "ageDays": "an unusual package age",
+        "daysSinceUpdate": "an unusual time since last update",
+        "depth": "an unusual dependency depth",
+        "blastRadius": "an unusual dependency blast radius",
+        "pagerank": "unusual graph influence",
+        "centrality": "unusual graph centrality",
+    }
+    for i, node in enumerate(model_nodes):
         node["anomalyScore"] = round(float(scores_normalized[i]), 4)
         node["isAnomaly"] = bool(predictions[i] == -1)
-    
-    # Compute correlation matrix
-    correlation = np.corrcoef(X.T).tolist()
-    # Replace NaN with 0
-    correlation = [[0 if math.isnan(v) else round(v, 3) for v in row] for row in correlation]
-    
-    # Compute feature importances (approximate via variance-based scoring)
-    importances = np.std(X_scaled, axis=0).tolist()
-    total = sum(importances) + 1e-8
-    importances = [round(v / total, 4) for v in importances]
-    
-    # Risk score distribution (histogram)
-    risk_scores = [n["riskScore"] for n in nodes]
-    hist_counts, hist_edges = np.histogram(risk_scores, bins=10, range=(0, 100))
-    risk_distribution = [
-        {"bin": f"{int(hist_edges[i])}-{int(hist_edges[i+1])}", "count": int(hist_counts[i])}
-        for i in range(len(hist_counts))
-    ]
+        observed = observed_values[i]
+        deviations = np.abs((X[i] - medians) / feature_scales)
+        strongest = np.argsort(deviations)[::-1][:3]
+        node["anomalyReasons"] = [feature_descriptions[feature_names[j]] for j in strongest if observed[j] and deviations[j] >= 1.5]
+
+    correlation = []
     
     # Feature matrix for scatter plots
     feature_matrix = []
-    for i, node in enumerate(nodes):
+    for i, node in enumerate(model_nodes):
         feature_matrix.append({
             "name": node["name"],
             "version": node["version"],
-            "maintainerCount": node.get("maintainerCount", 1),
-            "ageDays": node.get("ageDays", 365),
-            "daysSinceUpdate": node.get("daysSinceUpdate", 30),
+            "maintainerCount": node.get("maintainerCount"),
+            "ageDays": node.get("ageDays"),
+            "daysSinceUpdate": node.get("daysSinceUpdate"),
             "depth": node.get("depth", 0),
             "blastRadius": node.get("blastRadius", 0),
             "pagerank": node.get("pagerank", 0),
@@ -177,16 +182,28 @@ def run_isolation_forest(nodes):
             "riskScore": node.get("riskScore", 0),
             "anomalyScore": node.get("anomalyScore", 0),
             "isAnomaly": node.get("isAnomaly", False),
+            "anomalyReasons": node.get("anomalyReasons", []),
         })
     
     ml_stats = {
         "featureNames": feature_names,
         "featureMatrix": feature_matrix,
         "correlationMatrix": correlation,
-        "featureImportances": dict(zip(feature_names, importances)),
-        "riskDistribution": risk_distribution,
-        "totalAnomalies": sum(1 for n in nodes if n.get("isAnomaly")),
-        "totalPackages": len(nodes),
+        "featureImportances": {},
+        "featureCoverage": coverage,
+        "riskDistribution": [],
+        "totalAnomalies": sum(1 for n in model_nodes if n.get("isAnomaly")),
+        "totalPackages": len(model_nodes),
+        "evaluation": {
+            "method": "Isolation Forest outlier screening",
+            "labelledGroundTruthAvailable": False,
+            "status": "scored",
+            "scoredSamples": len(model_nodes),
+            "minimumSamples": minimum_samples,
+            "flaggedSamples": int(sum(1 for node in model_nodes if node.get("isAnomaly"))),
+            "anomalyRate": round(float(sum(1 for node in model_nodes if node.get("isAnomaly")) / len(model_nodes)), 4),
+            "scoreRange": [round(float(scores_normalized.min()), 4), round(float(scores_normalized.max()), 4)],
+        },
     }
     
     return nodes, ml_stats
@@ -202,6 +219,7 @@ def enrich_tree(original_tree, enriched_nodes_map):
     original_tree["pagerank"] = enriched.get("pagerank", 0)
     original_tree["centrality"] = enriched.get("centrality", 0)
     original_tree["blastRadius"] = enriched.get("blastRadius", 0)
+    original_tree["anomalyReasons"] = enriched.get("anomalyReasons", [])
     
     for child in original_tree.get("children", []):
         enrich_tree(child, enriched_nodes_map)

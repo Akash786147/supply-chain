@@ -4,6 +4,7 @@ import { pgTable, serial, integer, text, real, boolean, timestamp, jsonb } from 
 export const scans = pgTable("scans", {
   id: serial("id").primaryKey(),
   projectId: integer("project_id").notNull(),
+  pipelineId: integer("pipeline_id"),
   repoUrl: text("repo_url").notNull(),
   commitHash: text("commit_hash"),
   ecosystem: text("ecosystem").notNull().default("npm"),
@@ -14,6 +15,8 @@ export const scans = pgTable("scans", {
   totalAnomalies: integer("total_anomalies").default(0),
   scanDurationMs: integer("scan_duration_ms"),
   mlStats: jsonb("ml_stats"), // feature matrix, correlation, distribution
+  scanData: jsonb("scan_data"),
+  sbom: jsonb("sbom"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -50,4 +53,35 @@ export const projects = pgTable("projects", {
   riskLevel: text("risk_level").default("unknown"),
   lastScanAt: timestamp("last_scan_at"),
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Durable, hash-linked copy of the append-only application audit journal.
+export const auditEvents = pgTable("audit_events", {
+  id: text("id").primaryKey(),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+  projectId: integer("project_id"),
+  pipelineId: integer("pipeline_id"),
+  action: text("action").notNull(),
+  actor: text("actor").notNull(),
+  previousHash: text("previous_hash").notNull(),
+  eventHash: text("event_hash").notNull(),
+  payload: jsonb("payload").notNull(),
+});
+
+// Durable record of every pipeline attempt, including in-progress and failed runs.
+export const pipelineRuns = pgTable("pipeline_runs", {
+  id: integer("id").primaryKey(),
+  projectId: integer("project_id").notNull(),
+  trigger: text("trigger").notNull(),
+  branch: text("branch"),
+  commitHash: text("commit_hash"),
+  status: text("status").notNull(),
+  steps: jsonb("steps").notNull().default([]),
+  riskSummary: jsonb("risk_summary"),
+  decision: text("decision"),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+  error: text("error"),
+  pipelineData: jsonb("pipeline_data").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

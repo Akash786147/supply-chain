@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+.venv/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -11,6 +12,12 @@ yarn.lock
 .env.local
 .env.*.local
 container/
+data/
+data/audit_events.jsonl
+data/pipelines.json
+data/pipelines.json.*.tmp
+data/projects.json
+data/*.sbom.json
 
 # IDE
 .vscode/

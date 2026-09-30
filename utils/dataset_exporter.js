@@ -13,9 +13,9 @@ export function flattenToFeatureMatrix(node, depth = 0, results = []) {
     results.push({
         name: node.name,
         version: node.version,
-        maintainerCount: node.maintainerCount || Math.floor(Math.random() * 8) + 1,
-        ageDays: node.ageDays || Math.floor(Math.random() * 5000) + 100,
-        daysSinceUpdate: node.daysSinceUpdate || Math.floor(Math.random() * 1000) + 1,
+        maintainerCount: node.maintainerCount ?? null,
+        ageDays: node.ageDays ?? null,
+        daysSinceUpdate: node.daysSinceUpdate ?? null,
         depth,
         blastRadius: node.blastRadius || 0,
         pagerank: node.pagerank || 0.01,
@@ -53,9 +53,9 @@ export function calculateDatasetStats(featureMatrix) {
         };
     }
 
-    const anomalyScores = featureMatrix.map((r) => r.anomalyScore);
-    const ages = featureMatrix.map((r) => r.ageDays);
-    const maintainers = featureMatrix.map((r) => r.maintainerCount);
+    const anomalyScores = featureMatrix.map((r) => r.anomalyScore).filter(Number.isFinite);
+    const ages = featureMatrix.map((r) => r.ageDays).filter(Number.isFinite);
+    const maintainers = featureMatrix.map((r) => r.maintainerCount).filter(Number.isFinite);
 
     const mean = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
     const std = (arr) => {
@@ -72,8 +72,8 @@ export function calculateDatasetStats(featureMatrix) {
         anomaly_score_std: std(anomalyScores),
         anomaly_score_min: Math.min(...anomalyScores),
         anomaly_score_max: Math.max(...anomalyScores),
-        avg_package_age_days: mean(ages),
-        avg_maintainer_count: mean(maintainers),
+        avg_package_age_days: ages.length ? mean(ages) : null,
+        avg_maintainer_count: maintainers.length ? mean(maintainers) : null,
         top_anomalies: featureMatrix
             .filter((r) => r.isAnomaly)
             .sort((a, b) => b.anomalyScore - a.anomalyScore)
@@ -170,8 +170,13 @@ export function calculateCorrelationMatrix(featureMatrix) {
     features.forEach((f1) => {
         correlations[f1] = {};
         features.forEach((f2) => {
-            const vals1 = featureMatrix.map((r) => r[f1]);
-            const vals2 = featureMatrix.map((r) => r[f2]);
+            const pairs = featureMatrix.filter((r) => Number.isFinite(r[f1]) && Number.isFinite(r[f2]));
+            if (pairs.length < 2) {
+                correlations[f1][f2] = 0;
+                return;
+            }
+            const vals1 = pairs.map((r) => r[f1]);
+            const vals2 = pairs.map((r) => r[f2]);
 
             const mean1 = vals1.reduce((a, b) => a + b) / vals1.length;
             const mean2 = vals2.reduce((a, b) => a + b) / vals2.length;
