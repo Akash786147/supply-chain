@@ -1,11 +1,17 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
-import { fetchMLStats } from "../api";
+import { Link, useParams } from "react-router-dom";
+import { fetchMLStats, subscribeToUpdates } from "../api";
 import type { MLStats } from "../types";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  ScatterChart, Scatter, Cell, Legend, ZAxis,
-} from "recharts";
+
+const featureLabels: Record<string, string> = {
+  maintainerCount: "Maintainer count",
+  ageDays: "Package age",
+  daysSinceUpdate: "Time since update",
+  depth: "Dependency depth",
+  blastRadius: "Dependency reach",
+  pagerank: "Graph influence",
+  centrality: "Graph connectivity",
+};
 
 export default function MLAnalysis() {
   const { id } = useParams<{ id: string }>();
@@ -14,223 +20,71 @@ export default function MLAnalysis() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchMLStats(projectId)
-      .then(setStats)
-      .catch(() => setError("No ML data available. Run a scan on a real repository first."));
+    const refresh = () => fetchMLStats(projectId).then((value) => { setStats(value); setError(null); })
+      .catch(() => setError("No ML analysis is available yet. Run a scan first."));
+    refresh();
+    return subscribeToUpdates((update) => {
+      if (update.type === "connection" && update.status === "connected") refresh();
+      else if (update.projectId === projectId) refresh();
+    });
   }, [projectId]);
 
-  if (error) {
-    return (
-      <div className="page">
-        <div className="breadcrumb">
-          <Link to="/">Projects</Link> / <Link to={`/project/${projectId}`}>Project</Link> / <span>ML Analysis</span>
-        </div>
-        <div className="empty-state">
-          <span className="empty-icon">🧠</span>
-          <h2>No ML Data Available</h2>
-          <p className="muted">{error}</p>
-          <Link to={`/project/${projectId}`} className="btn btn-primary">Go Back & Run Scan</Link>
-        </div>
-      </div>
-    );
-  }
+  if (error) return <div className="page"><div className="empty-state"><h2>ML analysis unavailable</h2><p className="muted">{error}</p><Link to={`/project/${projectId}`} className="btn btn-primary">Go to project</Link></div></div>;
+  if (!stats) return <div className="page"><div className="loading-spinner" />Loading outlier analysis…</div>;
 
-  if (!stats) return <div className="page"><div className="loading-spinner" />Loading ML analysis...</div>;
-
-  const anomalies = stats.featureMatrix.filter((f) => f.isAnomaly);
-  const normal = stats.featureMatrix.filter((f) => !f.isAnomaly);
-
-  // Feature importance data
-  const importanceData = Object.entries(stats.featureImportances).map(([name, value]) => ({
-    name: name.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase()),
-    value: Math.round(value * 100),
-  })).sort((a, b) => b.value - a.value);
-
-  // Correlation heatmap labels
-  const featureLabels = stats.featureNames.map((n) =>
-    n.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase())
-  );
+  const evaluation = stats.evaluation;
+  const anomalies = stats.featureMatrix.filter((feature) => feature.isAnomaly).sort((a, b) => b.anomalyScore - a.anomalyScore);
+  const enoughSamples = evaluation?.status === "scored" && stats.totalPackages >= (evaluation.minimumSamples || 20);
+  const featureCoverage = stats.featureCoverage || {};
 
   return (
     <div className="page">
-      <div className="breadcrumb">
-        <Link to="/">Projects</Link> / <Link to={`/project/${projectId}`}>Project</Link> / <span>ML Analysis</span>
-      </div>
-
+      <div className="breadcrumb"><Link to="/">Projects</Link> / <Link to={`/project/${projectId}`}>Project</Link> / <span>ML Outlier Analysis</span></div>
       <div className="page-header">
-        <h1>🧠 ML Anomaly Detection</h1>
-        <div style={{ display: "flex", gap: 8 }}>
-          <Link to={`/project/${projectId}/graph`} className="btn">Network Graph</Link>
-          <Link to={`/project/${projectId}/tree`} className="btn">Dependency Tree</Link>
-        </div>
+        <div><h1>ML Outlier Analysis</h1><p className="muted">Isolation Forest finds packages whose measured metadata or dependency position differs from the rest of this repository.</p></div>
+        <Link to={`/project/${projectId}/risk`} className="btn">Security findings</Link>
       </div>
 
-      {/* Summary cards */}
-      <div className="ml-summary-row">
-        <div className="card ml-stat-card">
-          <div className="ml-stat-big">{stats.totalPackages}</div>
-          <div className="ml-stat-label">Packages Analyzed</div>
-        </div>
-        <div className="card ml-stat-card anomaly-card">
-          <div className="ml-stat-big" style={{ color: "var(--red)" }}>{stats.totalAnomalies}</div>
-          <div className="ml-stat-label">Anomalies Detected</div>
-        </div>
-        <div className="card ml-stat-card">
-          <div className="ml-stat-big">{stats.featureNames.length}</div>
-          <div className="ml-stat-label">Features Extracted</div>
-        </div>
-        <div className="card ml-stat-card">
-          <div className="ml-stat-big" style={{ color: "var(--green)" }}>
-            {Math.round(((stats.totalPackages - stats.totalAnomalies) / stats.totalPackages) * 100)}%
-          </div>
-          <div className="ml-stat-label">Safe Packages</div>
-        </div>
+      <div className="error-banner" style={{ color: "var(--text-secondary)", borderColor: "var(--border)", background: "var(--bg-card)" }}>
+        An outlier is a review lead, not evidence of a vulnerability. This unsupervised model has no labelled training set, so this screen does not claim accuracy, precision, or exploit probability.
       </div>
 
-      <div className="ml-charts-grid">
-        {/* Risk Score Distribution */}
-        <div className="card chart-card">
-          <h3>Risk Score Distribution</h3>
-          <p className="muted chart-desc">Histogram showing the distribution of risk scores across all packages</p>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={stats.riskDistribution}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
-              <XAxis dataKey="bin" stroke="#666" fontSize={11} />
-              <YAxis stroke="#666" fontSize={11} />
-              <Tooltip
-                contentStyle={{ background: "#141414", border: "1px solid #262626", borderRadius: 8, color: "#ededed" }}
-              />
-              <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                {stats.riskDistribution.map((entry, i) => {
-                  const val = parseInt(entry.bin.split("-")[0]);
-                  const color = val > 60 ? "#ef4444" : val > 40 ? "#f97316" : val > 20 ? "#eab308" : "#22c55e";
-                  return <Cell key={i} fill={color} fillOpacity={0.8} />;
-                })}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+      <div className="risk-overview" style={{ marginTop: 18 }}>
+        <div className="card stat-card"><div className="stat-value">{stats.totalPackages}</div><div className="stat-label">Packages evaluated</div></div>
+        <div className="card stat-card"><div className="stat-value">{enoughSamples ? stats.totalAnomalies : "—"}</div><div className="stat-label">Unusual packages</div></div>
+        <div className="card stat-card"><div className="stat-value">{enoughSamples && evaluation?.anomalyRate !== undefined ? `${(evaluation.anomalyRate * 100).toFixed(1)}%` : "—"}</div><div className="stat-label">Share marked as outliers</div></div>
+        <div className="card stat-card"><div className="stat-value">{enoughSamples ? "Scored" : "Not enough data"}</div><div className="stat-label">Model status</div></div>
+      </div>
 
-        {/* Feature Importance */}
-        <div className="card chart-card">
-          <h3>Feature Importance</h3>
-          <p className="muted chart-desc">Which features the Isolation Forest relied on most for anomaly scoring</p>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={importanceData} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
-              <XAxis type="number" stroke="#666" fontSize={11} domain={[0, 'auto']}
-                tickFormatter={(v: number) => `${v}%`}
-              />
-              <YAxis type="category" dataKey="name" stroke="#666" fontSize={11} width={120} />
-              <Tooltip
-                contentStyle={{ background: "#141414", border: "1px solid #262626", borderRadius: 8, color: "#ededed" }}
-                formatter={(value: number) => [`${value}%`, "Importance"]}
-              />
-              <Bar dataKey="value" radius={[0, 4, 4, 0]} fill="#3b82f6" fillOpacity={0.8} />
-            </BarChart>
-          </ResponsiveContainer>
+      {!enoughSamples ? (
+        <div className="card" style={{ marginTop: 20 }}>
+          <h2>Outlier statistics hidden</h2>
+          <p className="muted">The model needs at least {evaluation?.minimumSamples || 20} third-party dependency records for a minimally useful comparison. This scan has {stats.totalPackages}. It will not label this small sample safe or suspicious.</p>
         </div>
-
-        {/* Scatter: Age vs Maintainers */}
-        <div className="card chart-card">
-          <h3>Package Age vs Maintainer Count</h3>
-          <p className="muted chart-desc">Red dots indicate ML-flagged anomalies — suspicious outliers in the metadata space</p>
-          <ResponsiveContainer width="100%" height={300}>
-            <ScatterChart>
-              <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
-              <XAxis type="number" dataKey="ageDays" name="Age (days)" stroke="#666" fontSize={11} />
-              <YAxis type="number" dataKey="maintainerCount" name="Maintainers" stroke="#666" fontSize={11} />
-              <ZAxis type="number" dataKey="riskScore" range={[30, 200]} name="Risk Score" />
-              <Tooltip
-                contentStyle={{ background: "#141414", border: "1px solid #262626", borderRadius: 8, color: "#ededed" }}
-                formatter={(value: number, name: string) => [value, name]}
-                labelFormatter={() => ""}
-              />
-              <Legend />
-              <Scatter name="Normal" data={normal} fill="#22c55e" fillOpacity={0.6} />
-              <Scatter name="Anomaly" data={anomalies} fill="#ef4444" fillOpacity={0.9} />
-            </ScatterChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Correlation Heatmap */}
-        <div className="card chart-card">
-          <h3>Feature Correlation Heatmap</h3>
-          <p className="muted chart-desc">Pearson correlation between extracted features — darker = stronger relationship</p>
-          <div className="heatmap-container">
-            <div className="heatmap-row">
-              <div className="heatmap-labels-y">
-                {featureLabels.map((l, i) => (
-                  <div key={`y-${i}`} className="heatmap-label">{l}</div>
-                ))}
-              </div>
-              <div className="heatmap-grid" style={{ gridTemplateColumns: `repeat(${featureLabels.length}, 1fr)` }}>
-                {stats.correlationMatrix.map((row, i) =>
-                  row.map((val, j) => {
-                    const abs = Math.abs(val);
-                    const color = val > 0
-                      ? `rgba(59, 130, 246, ${abs * 0.9})`
-                      : `rgba(239, 68, 68, ${abs * 0.9})`;
-                    return (
-                      <div
-                        key={`${i}-${j}`}
-                        className="heatmap-cell"
-                        style={{ background: color }}
-                        title={`${featureLabels[i]} × ${featureLabels[j]}: ${val.toFixed(2)}`}
-                      >
-                        <span className="heatmap-val">{abs > 0.3 ? val.toFixed(1) : ""}</span>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-            <div className="heatmap-labels-x" style={{ marginLeft: 108 }}>
-              {featureLabels.map((l, i) => (
-                <div key={`x-${i}`} className="heatmap-label-x">{l}</div>
-              ))}
+      ) : (
+        <>
+          <div className="card" style={{ marginTop: 20 }}>
+            <h2>Inputs used</h2>
+            <p className="muted">Measured package metadata and dependency graph position. Missing registry values are median-filled for scoring and are not treated as evidence of risk.</p>
+            <div className="sbom-feature-list">
+              {stats.featureNames.map((name) => <span className="badge" key={name}>{featureLabels[name] || name} · {Math.round((featureCoverage[name] || 0) * 100)}% available</span>)}
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Anomalies Table */}
-      <div className="card" style={{ marginTop: 24 }}>
-        <h3>🚨 Flagged Anomalies — Isolation Forest Results</h3>
-        <p className="muted" style={{ marginBottom: 16 }}>
-          Packages flagged as statistical outliers based on metadata features and graph topology
-        </p>
-        {anomalies.length === 0 ? (
-          <div className="signals-empty">✓ No anomalies detected — all packages appear normal</div>
-        ) : (
-          <div className="signals-table">
-            <div className="signals-table-head anomaly-head">
-              <span>Package</span>
-              <span>Anomaly Score</span>
-              <span>Risk Score</span>
-              <span>Maintainers</span>
-              <span>Age (days)</span>
-              <span>Depth</span>
-              <span>PageRank</span>
-            </div>
-            {anomalies
-              .sort((a, b) => b.anomalyScore - a.anomalyScore)
-              .map((a, i) => (
-                <div className="signals-table-row anomaly-row" key={i}>
-                  <span className="signal-package">{a.name}@{a.version}</span>
-                  <span style={{ color: "var(--red)", fontWeight: 700 }}>{(a.anomalyScore * 100).toFixed(1)}%</span>
-                  <span style={{ color: a.riskScore > 40 ? "var(--red)" : a.riskScore > 20 ? "var(--yellow)" : "var(--green)" }}>
-                    {a.riskScore}
-                  </span>
-                  <span>{a.maintainerCount}</span>
-                  <span>{a.ageDays}</span>
-                  <span>{a.depth}</span>
-                  <span>{a.pagerank.toFixed(4)}</span>
-                </div>
-              ))}
+          <div className="card" style={{ marginTop: 20 }}>
+            <div className="pipeline-header"><h2 style={{ margin: 0 }}>Packages that differ from peers</h2><span className="muted">Ranked by relative outlier score</span></div>
+            {anomalies.length === 0 ? <p className="muted">No packages were marked as outliers in this scan.</p> : <div className="signals-table" style={{ marginTop: 14 }}>
+              <div className="signals-table-head"><span>Package</span><span>Outlier score</span><span>Observed differences</span><span>Interpretation</span></div>
+              {anomalies.map((feature) => <div className="signals-table-row" key={`${feature.name}@${feature.version}`}>
+                <span className="signal-package">{feature.name}@{feature.version}</span>
+                <span>{(feature.anomalyScore * 100).toFixed(0)} / 100</span>
+                <span>{feature.anomalyReasons?.length ? feature.anomalyReasons.join(", ") : "Combined feature pattern"}</span>
+                <span className="muted">Review alongside the package advisory and source evidence before taking action.</span>
+              </div>)}
+            </div>}
           </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 }

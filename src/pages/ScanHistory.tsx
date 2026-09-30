@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { fetchScanHistory, fetchProject } from "../api";
-import type { ScanHistoryEntry, Project } from "../types";
+import { fetchScanHistory, fetchProject, fetchAuditEvents, subscribeToUpdates } from "../api";
+import type { ScanHistoryEntry, Project, AuditEvent } from "../types";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area,
@@ -12,14 +12,24 @@ export default function ScanHistory() {
   const projectId = Number(id);
   const [history, setHistory] = useState<ScanHistoryEntry[]>([]);
   const [project, setProject] = useState<Project | null>(null);
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+  const [auditError, setAuditError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchScanHistory(projectId).then(setHistory);
-    fetchProject(projectId).then(setProject);
+    const refresh = () => {
+      fetchScanHistory(projectId).then(setHistory).catch(() => setHistory([]));
+      fetchProject(projectId).then(setProject).catch(() => setProject(null));
+      fetchAuditEvents(projectId).then(setAuditEvents).catch(() => setAuditError("Audit records are unavailable."));
+    };
+    refresh();
+    return subscribeToUpdates((update) => {
+      if (update.type === "connection" && update.status === "connected") refresh();
+      else if (update.projectId === projectId && ["pipeline", "project", "audit"].includes(update.type)) refresh();
+    });
   }, [projectId]);
 
   const chartData = [...history].reverse().map((scan, i) => ({
-    scan: `#${i + 1}`,
+    scan: `#${scan.pipelineId ?? i + 1}`,
     riskScore: scan.overallRiskScore || 0,
     deps: scan.totalDeps || 0,
     signals: scan.totalSignals || 0,
@@ -111,7 +121,7 @@ export default function ScanHistory() {
               </div>
               {history.map((scan, i) => (
                 <div className="signals-table-row" key={scan.id || i}>
-                  <span className="signal-package">#{history.length - i}</span>
+                  <span className="signal-package">#{scan.pipelineId ?? history.length - i}</span>
                   <span>{new Date(scan.createdAt).toLocaleDateString()}</span>
                   <span style={{ color: riskColor(scan.riskLevel), fontWeight: 700 }}>{Math.round(scan.overallRiskScore)}</span>
                   <span style={{ color: riskColor(scan.riskLevel), textTransform: "uppercase", fontWeight: 600, fontSize: 11 }}>
@@ -129,6 +139,34 @@ export default function ScanHistory() {
           </div>
         </>
       )}
+      <div className="card" style={{ marginTop: 24 }}>
+        <h3>Audit Trail</h3>
+        <p className="muted" style={{ marginBottom: 16 }}>
+          Append-only records are hash-linked so edits, omissions, or reordering can be detected. Actor labels identify the trigger source; this prototype does not authenticate individual users.
+        </p>
+        {auditError ? (
+          <p className="muted">{auditError}</p>
+        ) : auditEvents.length === 0 ? (
+          <p className="muted">No audit events recorded yet.</p>
+        ) : (
+          <div className="signals-table">
+            <div className="signals-table-head" style={{ gridTemplateColumns: "1.4fr 1.3fr 0.7fr 2.6fr" }}>
+              <span>Time</span><span>Event</span><span>Source</span><span>Details</span>
+            </div>
+            {auditEvents.map((event) => {
+              const detail = event.error || event.stage || event.commitHash || event.repoUrl || event.format || event.decision || "—";
+              return (
+                <div className="signals-table-row" style={{ gridTemplateColumns: "1.4fr 1.3fr 0.7fr 2.6fr" }} key={event.id}>
+                  <span>{new Date(event.occurredAt).toLocaleString()}</span>
+                  <span className="signal-package">{event.action.replaceAll(".", " ")}</span>
+                  <span>{event.actor}</span>
+                  <span className="muted" title={detail}>{detail}{event.integrity && <small className={`integrity-tag integrity-${event.integrity}`}> · chain {event.integrity}</small>}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

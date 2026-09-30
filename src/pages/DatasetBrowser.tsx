@@ -11,8 +11,8 @@ interface DatasetStats {
   anomaly_score_std: number;
   anomaly_score_min: number;
   anomaly_score_max: number;
-  avg_package_age_days: number;
-  avg_maintainer_count: number;
+  avg_package_age_days: number | null;
+  avg_maintainer_count: number | null;
   top_anomalies?: FeatureRow[];
 }
 
@@ -147,11 +147,11 @@ export default function DatasetBrowser() {
           </div>
           <div className="stat-card">
             <div className="stat-label">Avg Package Age</div>
-            <div className="stat-value">{stats.avg_package_age_days.toFixed(0)} days</div>
+            <div className="stat-value">{stats.avg_package_age_days?.toFixed(0) ?? "—"} days</div>
           </div>
           <div className="stat-card">
             <div className="stat-label">Avg Maintainers</div>
-            <div className="stat-value">{stats.avg_maintainer_count.toFixed(1)}</div>
+            <div className="stat-value">{stats.avg_maintainer_count?.toFixed(1) ?? "—"}</div>
           </div>
         </div>
       )}

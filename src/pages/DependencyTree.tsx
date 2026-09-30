@@ -41,10 +41,10 @@ export default function DependencyTree() {
       </div>
 
       <div className="tree-legend">
-        <span><span className="legend-dot" style={{ background: "var(--green)" }} /> Low (0–25)</span>
-        <span><span className="legend-dot" style={{ background: "var(--yellow)" }} /> Medium (26–50)</span>
-        <span><span className="legend-dot" style={{ background: "var(--red)" }} /> High (51–75)</span>
-        <span><span className="legend-dot" style={{ background: "var(--red)" }} /> Critical (76+)</span>
+        <span><span className="legend-dot" style={{ background: "var(--green)" }} /> Low (0–39)</span>
+        <span><span className="legend-dot" style={{ background: "var(--yellow)" }} /> Medium (40–69)</span>
+        <span><span className="legend-dot" style={{ background: "var(--red)" }} /> High (70–89)</span>
+        <span><span className="legend-dot" style={{ background: "var(--red)" }} /> Critical (90+)</span>
       </div>
 
       <div className="tree-container" key={key}>

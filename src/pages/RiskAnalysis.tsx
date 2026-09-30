@@ -1,166 +1,113 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { fetchRiskSummary, fetchRiskSignals } from "../api";
+import { fetchRiskSummary, fetchRiskSignals, subscribeToUpdates } from "../api";
 import type { RiskSummary, RiskSignal } from "../types";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+
+const priority: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
 
 export default function RiskAnalysis() {
   const { id } = useParams<{ id: string }>();
   const projectId = Number(id);
   const [summary, setSummary] = useState<RiskSummary | null>(null);
   const [signals, setSignals] = useState<RiskSignal[]>([]);
-  const [filterSeverity, setFilterSeverity] = useState<string>("all");
+  const [showContext, setShowContext] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchRiskSummary(projectId).then(setSummary);
-    fetchRiskSignals(projectId).then(setSignals);
+    const refresh = () => {
+      fetchRiskSummary(projectId).then((value) => { setSummary(value); setError(null); })
+        .catch(() => { setSummary(null); setError("No scan results are available. Run a scan to populate this view."); });
+      fetchRiskSignals(projectId).then(setSignals).catch(() => setSignals([]));
+    };
+    refresh();
+    return subscribeToUpdates((update) => {
+      if (update.type === "connection" && update.status === "connected") refresh();
+      else if (update.projectId === projectId) refresh();
+    });
   }, [projectId]);
 
-  if (!summary) return <div className="page"><div className="loading-spinner" />Loading risk analysis...</div>;
+  const attention = useMemo(() => signals.filter((signal) => ["critical", "high", "medium"].includes(signal.severity)), [signals]);
+  const grouped = useMemo(() => {
+    const groups = new Map<string, RiskSignal[]>();
+    for (const signal of attention) {
+      const root = signal.rootDependency || signal.package;
+      groups.set(root, [...(groups.get(root) || []), signal]);
+    }
+    return [...groups.entries()].map(([root, findings]) => ({
+      root,
+      findings: findings.sort((a, b) => (priority[b.severity] || 0) - (priority[a.severity] || 0)),
+      severity: findings.reduce((highest, item) => priority[item.severity] > priority[highest] ? item.severity : highest, "medium"),
+      packages: [...new Set(findings.map((item) => `${item.package}${item.packageVersion ? `@${item.packageVersion}` : ""}`))],
+    })).sort((a, b) => priority[b.severity] - priority[a.severity]);
+  }, [attention]);
 
-  const filtered = filterSeverity === "all" ? signals : signals.filter((s) => s.severity === filterSeverity);
+  if (!summary) return <div className="page">{error ? <div className="empty-state"><h2>Risk data unavailable</h2><p className="muted">{error}</p><Link to={`/project/${projectId}`} className="btn btn-primary">Go to project</Link></div> : <><div className="loading-spinner" />Loading risk analysis...</>}</div>;
 
-  const severityColor = (s: string) => {
-    if (s === "critical") return "var(--red)";
-    if (s === "high") return "#f97316";
-    if (s === "medium") return "var(--yellow)";
-    return "var(--muted)";
-  };
-
-  const riskColor = (level: string) => {
-    if (level === "critical" || level === "high") return "var(--red)";
-    if (level === "medium") return "var(--yellow)";
-    if (level === "low") return "var(--green)";
-    return "var(--muted)";
-  };
-
-  // Mini chart data for signal distribution
-  const signalTypes = new Map<string, number>();
-  signals.forEach((s) => {
-    signalTypes.set(s.signal, (signalTypes.get(s.signal) || 0) + 1);
-  });
-  const signalChartData = Array.from(signalTypes.entries())
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 8);
+  const severityColor = (severity: string) => severity === "critical" || severity === "high" ? "var(--red)" : severity === "medium" ? "var(--yellow)" : "var(--muted)";
+  const context = signals.filter((signal) => signal.severity === "info");
+  const lowerPriority = signals.filter((signal) => signal.severity === "low" || signal.severity === "unknown");
 
   return (
     <div className="page">
-      <div className="breadcrumb">
-        <Link to="/">Projects</Link> / <Link to={`/project/${projectId}`}>{summary.projectName}</Link> /{" "}
-        <span>Risk Analysis</span>
-      </div>
-
+      <div className="breadcrumb"><Link to="/">Projects</Link> / <Link to={`/project/${projectId}`}>{summary.projectName}</Link> / <span>Security Findings</span></div>
       <div className="page-header">
-        <h1>⚠ Risk Analysis</h1>
+        <div><h1>Security Findings</h1><p className="muted">Only advisory and source-code findings affect the attention list. Package age and missing metadata are context, not proof of a vulnerability.</p></div>
         <div style={{ display: "flex", gap: 8 }}>
-          <Link to={`/project/${projectId}/ml`} className="btn">🧠 ML Analysis</Link>
-          <Link to={`/project/${projectId}/tree`} className="btn">🌲 Dep Tree</Link>
+          <Link to={`/project/${projectId}/sbom`} className="btn">View SBOM</Link>
+          <Link to={`/project/${projectId}/ml`} className="btn">ML outliers</Link>
         </div>
       </div>
 
-      {/* Overview cards */}
       <div className="risk-overview">
-        <div className="card risk-score-card glass-card">
-          <div className="risk-score-big" style={{ color: riskColor(summary.overallRiskLevel) }}>
-            {summary.overallRiskScore}
-          </div>
-          <div className="risk-score-label">Overall Risk Score</div>
-          <div className="risk-level-label" style={{ color: riskColor(summary.overallRiskLevel) }}>
-            {summary.overallRiskLevel.toUpperCase()}
-          </div>
-        </div>
-        <div className="card stat-card">
-          <div className="stat-value">{summary.totalDependencies}</div>
-          <div className="stat-label">Total Dependencies</div>
-        </div>
-        <div className="card stat-card">
-          <div className="stat-value">{summary.totalSignals}</div>
-          <div className="stat-label">Risk Signals Found</div>
-        </div>
-        <div className="card stat-card severity-card">
-          <div className="severity-row">
-            <span className="severity-dot" style={{ background: "var(--red)" }} />
-            <span>Critical: {summary.signalCounts.critical}</span>
-          </div>
-          <div className="severity-row">
-            <span className="severity-dot" style={{ background: "#f97316" }} />
-            <span>High: {summary.signalCounts.high}</span>
-          </div>
-          <div className="severity-row">
-            <span className="severity-dot" style={{ background: "var(--yellow)" }} />
-            <span>Medium: {summary.signalCounts.medium}</span>
-          </div>
-          <div className="severity-row">
-            <span className="severity-dot" style={{ background: "var(--green)" }} />
-            <span>Low: {summary.signalCounts.low}</span>
-          </div>
-        </div>
+        <div className="card stat-card"><div className="stat-value">{summary.totalDependencies}</div><div className="stat-label">Dependencies scanned</div></div>
+        <div className="card stat-card"><div className="stat-value">{attention.length}</div><div className="stat-label">Findings needing review</div></div>
+        <div className="card stat-card"><div className="stat-value">{summary.signalCounts.critical + summary.signalCounts.high}</div><div className="stat-label">High or critical findings</div></div>
+        <div className="card stat-card"><div className="stat-value">{summary.sourceFindingCount ?? signals.filter((signal) => signal.source?.startsWith("Static source-code rule")).length}</div><div className="stat-label">Code findings</div></div>
       </div>
+      <p className="muted">Source checks scanned {summary.sourceFilesScanned ?? 0} files. Dependency advisory lookup status: {summary.vulnerabilityScanStatus || "unknown"}.</p>
 
-      {/* Signal Distribution Mini Chart */}
-      {signalChartData.length > 0 && (
-        <div className="card" style={{ marginTop: 24 }}>
-          <h3>Signal Type Distribution</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={signalChartData}>
-              <XAxis dataKey="name" stroke="#666" fontSize={10} angle={-20} textAnchor="end" height={50} />
-              <YAxis stroke="#666" fontSize={11} />
-              <Tooltip contentStyle={{ background: "#141414", border: "1px solid #262626", borderRadius: 8, color: "#ededed" }} />
-              <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                {signalChartData.map((entry, i) => {
-                  const c = ["deprecated", "known-vulnerability"].includes(entry.name) ? "#ef4444"
-                    : ["unmaintained", "no-repository"].includes(entry.name) ? "#f97316"
-                    : ["outdated", "few-maintainers"].includes(entry.name) ? "#eab308"
-                    : "#3b82f6";
-                  return <Cell key={i} fill={c} fillOpacity={0.8} />;
-                })}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      {/* Signals table */}
-      <div style={{ marginTop: 24 }}>
-        <div className="signals-header">
-          <h2>Risk Signals</h2>
-          <div className="filter-btns">
-            {["all", "critical", "high", "medium", "low"].map((sev) => (
-              <button
-                key={sev}
-                className={`btn btn-sm ${filterSeverity === sev ? "btn-primary" : ""}`}
-                onClick={() => setFilterSeverity(sev)}
-              >
-                {sev}
-              </button>
+      <section style={{ marginTop: 26 }}>
+        <h2>Attention groups</h2>
+        <p className="muted">Transitive packages are grouped under the direct dependency that brings them in, so one underlying issue is easier to assess.</p>
+        {grouped.length === 0 ? (
+          <div className="card" style={{ marginTop: 14 }}><h3>No medium, high, or critical findings</h3><p className="muted">This scan found no findings in the attention range. That does not mean every package or source-code path has been proven safe.</p></div>
+        ) : (
+          <div className="pipeline-list" style={{ marginTop: 14 }}>
+            {grouped.map((group) => (
+              <article className="card" key={group.root}>
+                <div className="pipeline-header">
+                  <div><h3 style={{ margin: 0 }}>{group.root}</h3><span className="muted">{group.packages.length} affected {group.packages.length === 1 ? "package" : "packages"} · highest severity {group.severity}</span></div>
+                  <span className="badge" style={{ color: severityColor(group.severity), borderColor: severityColor(group.severity) }}>{group.findings.length} findings</span>
+                </div>
+                <div className="signals-table" style={{ marginTop: 12 }}>
+                  {group.findings.map((finding, index) => (
+                    <div className="signals-table-row" key={`${finding.signal}-${finding.package}-${index}`}>
+                      <span className="signal-package">{finding.package}</span>
+                      <span className="signal-name">{finding.signal}</span>
+                      <span style={{ color: severityColor(finding.severity), textTransform: "capitalize" }}>{finding.severity}</span>
+                      <span className="signal-desc">{finding.description}{finding.snippet && <code className="finding-snippet">{finding.snippet}</code>}{finding.source && <small className="evidence-source">{finding.source}</small>}{finding.references?.[0] && <a className="evidence-link" href={finding.references[0]} target="_blank" rel="noreferrer">Evidence ↗</a>}</span>
+                    </div>
+                  ))}
+                </div>
+              </article>
             ))}
           </div>
-        </div>
+        )}
+      </section>
 
-        <div className="signals-table">
-          <div className="signals-table-head">
-            <span>Package</span>
-            <span>Signal</span>
-            <span>Severity</span>
-            <span>Description</span>
-          </div>
-          {filtered.map((sig, i) => (
-            <div className="signals-table-row" key={i}>
-              <span className="signal-package">
-                {sig.package}
-                {sig.isAnomaly && <span className="ml-badge">ML</span>}
-              </span>
-              <span className="signal-name">{sig.signal}</span>
-              <span className="signal-severity" style={{ color: severityColor(sig.severity) }}>
-                {sig.severity}
-              </span>
-              <span className="signal-desc">{sig.description}</span>
-            </div>
-          ))}
-          {filtered.length === 0 && <div className="signals-empty">No signals for this filter.</div>}
+      {lowerPriority.length > 0 && <details style={{ marginTop: 24 }}>
+        <summary style={{ cursor: "pointer", color: "var(--text-secondary)" }}>Low or unscored advisories ({lowerPriority.length}) — lower priority, but still review</summary>
+        <div className="card" style={{ marginTop: 12 }}>
+          {lowerPriority.map((item, index) => <p key={`${item.package}-${item.signal}-${index}`}><strong>{item.package}{item.packageVersion ? `@${item.packageVersion}` : ""}</strong> · {item.signal} · {item.severity}: {item.description}{item.references?.[0] && <> <a className="evidence-link" href={item.references[0]} target="_blank" rel="noreferrer">Evidence ↗</a></>}</p>)}
         </div>
-      </div>
+      </details>}
+
+      {context.length > 0 && <details style={{ marginTop: 24 }} open={showContext} onToggle={(event) => setShowContext(event.currentTarget.open)}>
+        <summary style={{ cursor: "pointer", color: "var(--text-secondary)" }}>Package context ({context.length}) — informational; does not raise the security risk score</summary>
+        <div className="card" style={{ marginTop: 12 }}>
+          {context.map((item, index) => <p key={`${item.package}-${item.signal}-${index}`} className="muted"><strong>{item.package}</strong>: {item.description}</p>)}
+        </div>
+      </details>}
     </div>
   );
 }

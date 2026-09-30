@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { fetchProject, fetchPipelines, triggerScan } from "../api";
+import { fetchProject, fetchPipelines, triggerScan, subscribeToUpdates } from "../api";
 import type { Project, Pipeline } from "../types";
 
 export default function ProjectDetail() {
@@ -9,31 +9,41 @@ export default function ProjectDetail() {
   const [project, setProject] = useState<Project | null>(null);
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [scanning, setScanning] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchProject(projectId).then(setProject);
-    fetchPipelines(projectId).then(setPipelines);
-  }, [projectId]);
-
-  // Poll for updates while scanning
-  useEffect(() => {
-    if (!scanning) return;
-    const interval = setInterval(async () => {
-      const proj = await fetchProject(projectId);
-      setProject(proj);
-      const pls = await fetchPipelines(projectId);
-      setPipelines(pls.reverse());
-      if (proj.status === "success" || proj.status === "failed") {
-        setScanning(false);
+    const syncSnapshot = () => {
+      fetchProject(projectId).then((value) => { setProject(value); setScanning(value.status === "running"); setPageError(null); })
+        .catch(() => { setProject(null); setPageError("Project not found or the backend is unavailable."); });
+      fetchPipelines(projectId).then((rows) => setPipelines(rows.sort((a, b) => b.id - a.id))).catch(() => setPipelines([]));
+    };
+    syncSnapshot();
+    return subscribeToUpdates((update) => {
+      if (update.type === "connection") {
+        if (update.status === "connected") syncSnapshot();
+        return;
       }
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [scanning, projectId]);
+      if (update.projectId !== projectId) return;
+      if (update.type === "pipeline" && update.pipeline) {
+        const pipeline = update.pipeline;
+        setPipelines((current) => [pipeline, ...current.filter((item) => item.id !== pipeline.id)].sort((a, b) => b.id - a.id));
+        setScanning(pipeline.status === "running");
+        if (pipeline.status !== "running") setScanning(false);
+      }
+      if (update.type === "project" && update.project) {
+        setProject((current) => current ? { ...current, ...update.project } : current);
+      }
+    });
+  }, [projectId]);
 
   const handleScan = async () => {
     setScanning(true);
-    const p = await triggerScan(projectId);
-    setPipelines((prev) => [p, ...prev]);
+    try {
+      const pipeline = await triggerScan(projectId);
+      setPipelines((current) => [pipeline, ...current.filter((item) => item.id !== pipeline.id)]);
+    } catch {
+      setScanning(false);
+    }
   };
 
   const statusIcon = (s: string) => {
@@ -59,7 +69,7 @@ export default function ProjectDetail() {
     return <span className="badge">PENDING</span>;
   };
 
-  if (!project) return <div className="page"><div className="loading-spinner" />Loading...</div>;
+  if (!project) return <div className="page">{pageError ? <div className="error-banner">{pageError}</div> : <><div className="loading-spinner" />Loading...</>}</div>;
 
   return (
     <div className="page">
@@ -77,16 +87,20 @@ export default function ProjectDetail() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
+          <Link to={`/project/${projectId}/sbom`} className="btn">View SBOM</Link>
           <Link to={`/project/${project.id}/tree`} className="btn">🌲 Tree</Link>
           <Link to={`/project/${project.id}/risk`} className="btn">⚠ Risk</Link>
-          <Link to={`/project/${project.id}/ml`} className="btn">🧠 ML</Link>
-          <Link to={`/project/${project.id}/graph`} className="btn">🕸️ Graph</Link>
+          <Link to={`/project/${project.id}/ml`} className="btn">🧠 ML Outliers</Link>
+          <Link to={`/project/${project.id}/graph`} className="btn">🕸️ Attention Map</Link>
           <Link to={`/project/${project.id}/history`} className="btn">📊 History</Link>
           <button className="btn btn-primary" onClick={handleScan} disabled={scanning}>
             {scanning ? "⟳ Scanning..." : "▶ Run Scan"}
           </button>
         </div>
       </div>
+
+      {scanning && <div className="live-banner"><span className="live-dot" /> Scan progress is updating live</div>}
+      {pageError && <div className="error-banner">{pageError}</div>}
 
       <h2>Analysis Pipelines</h2>
       <div className="pipeline-list">
@@ -107,15 +121,20 @@ export default function ProjectDetail() {
 
             <div className="pipeline-steps">
               {pl.steps.map((step, i) => (
-                <div className={`pipeline-step ${step.status === "running" ? "step-running" : ""}`} key={i}>
-                  <span className="step-icon" style={{ color: statusColor(step.status) }}>
-                    {statusIcon(step.status)}
-                  </span>
-                  <span className="step-name">{step.name}</span>
-                  <span className="step-duration">{step.duration}</span>
+                <div className={`pipeline-step-wrap ${step.status === "failed" ? "step-failed" : ""}`} key={i}>
+                  <div className={`pipeline-step ${step.status === "running" ? "step-running" : ""}`}>
+                    <span className="step-icon" style={{ color: statusColor(step.status) }}>
+                      {statusIcon(step.status)}
+                    </span>
+                    <span className="step-name">{step.name}</span>
+                    <span className="step-duration">{step.duration}</span>
+                  </div>
+                  {step.error && <div className="pipeline-step-error"><strong>Failure detail:</strong> {step.error}</div>}
                 </div>
               ))}
             </div>
+
+            {pl.error && <div className="pipeline-error"><strong>Scan failed:</strong> {pl.error}</div>}
 
             {pl.riskSummary && (
               <div className="pipeline-risk-summary">

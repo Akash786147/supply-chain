@@ -4,9 +4,9 @@
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color-scheme: light;
-  color: #1e293b;
-  background-color: #f8fafc;
+  color-scheme: dark;
+  color: #edf0fa;
+  background-color: #0c0e15;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

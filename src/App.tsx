@@ -7,6 +7,7 @@ import MLAnalysis from "./pages/MLAnalysis";
 import NetworkGraph from "./pages/NetworkGraph";
 import ScanHistory from "./pages/ScanHistory";
 import DatasetBrowser from "./pages/DatasetBrowser";
+import SbomViewer from "./pages/SbomViewer";
 import "./App.css";
 
 function Sidebar() {
@@ -28,43 +29,43 @@ function Sidebar() {
           <div className="sidebar-section">
             <div className="sidebar-section-title">Current Project</div>
             <Link
-              to={location.pathname.replace(/\/(tree|risk|ml|graph|history|dataset)$/, "")}
+              to={location.pathname.replace(/\/(tree|risk|ml|graph|history|dataset|sbom)$/, "")}
               className={`nav-item nav-sub ${location.pathname.match(/\/project\/\d+$/) ? "active" : ""}`}
             >
               <span className="nav-icon">▶</span> Pipelines
             </Link>
             <Link
-              to={location.pathname.replace(/\/(tree|risk|ml|graph|history|dataset)$/, "") + "/tree"}
+              to={location.pathname.replace(/\/(tree|risk|ml|graph|history|dataset|sbom)$/, "") + "/tree"}
               className={`nav-item nav-sub ${location.pathname.endsWith("/tree") ? "active" : ""}`}
             >
               <span className="nav-icon">🌲</span> Dep Tree
             </Link>
             <Link
-              to={location.pathname.replace(/\/(tree|risk|ml|graph|history|dataset)$/, "") + "/risk"}
+              to={location.pathname.replace(/\/(tree|risk|ml|graph|history|dataset|sbom)$/, "") + "/risk"}
               className={`nav-item nav-sub ${location.pathname.endsWith("/risk") ? "active" : ""}`}
             >
-              <span className="nav-icon">⚠</span> Risk Signals
+              <span className="nav-icon">⚠</span> Security Findings
             </Link>
             <Link
-              to={location.pathname.replace(/\/(tree|risk|ml|graph|history|dataset)$/, "") + "/ml"}
+              to={location.pathname.replace(/\/(tree|risk|ml|graph|history|dataset|sbom)$/, "") + "/ml"}
               className={`nav-item nav-sub ${location.pathname.endsWith("/ml") ? "active" : ""}`}
             >
-              <span className="nav-icon">🧠</span> ML Analysis
+              <span className="nav-icon">🧠</span> ML Outliers
             </Link>
             <Link
-              to={location.pathname.replace(/\/(tree|risk|ml|graph|history|dataset)$/, "") + "/graph"}
+              to={location.pathname.replace(/\/(tree|risk|ml|graph|history|dataset|sbom)$/, "") + "/graph"}
               className={`nav-item nav-sub ${location.pathname.endsWith("/graph") ? "active" : ""}`}
             >
-              <span className="nav-icon">🕸️</span> Network DAG
+              <span className="nav-icon">🕸️</span> Dependency DAG
             </Link>
             <Link
-              to={location.pathname.replace(/\/(tree|risk|ml|graph|history|dataset)$/, "") + "/history"}
+              to={location.pathname.replace(/\/(tree|risk|ml|graph|history|dataset|sbom)$/, "") + "/history"}
               className={`nav-item nav-sub ${location.pathname.endsWith("/history") ? "active" : ""}`}
             >
               <span className="nav-icon">📊</span> Scan History
             </Link>
             <Link
-              to={location.pathname.replace(/\/(tree|risk|ml|graph|history|dataset)$/, "") + "/dataset"}
+              to={location.pathname.replace(/\/(tree|risk|ml|graph|history|dataset|sbom)$/, "") + "/dataset"}
               className={`nav-item nav-sub ${location.pathname.endsWith("/dataset") ? "active" : ""}`}
             >
               <span className="nav-icon">📋</span> Dataset
@@ -95,6 +96,7 @@ function App() {
             <Route path="/project/:id/graph" element={<NetworkGraph />} />
             <Route path="/project/:id/history" element={<ScanHistory />} />
             <Route path="/project/:id/dataset" element={<DatasetBrowser />} />
+            <Route path="/project/:id/sbom" element={<SbomViewer />} />
           </Routes>
         </main>
       </div>
