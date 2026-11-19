@@ -21,6 +21,23 @@ export interface LiveUpdate {
   project?: Partial<Project>;
 }
 
+export interface NetworkEvent {
+  observedAt: string;
+  destination: string;
+  protocol: string;
+  port: number;
+  purpose: string;
+  policy: "expected" | "review";
+  outcome: "success" | "failed";
+}
+
+export interface NetworkActivity {
+  projectId: number;
+  commitHash?: string;
+  events: NetworkEvent[];
+  allowlist: Array<Pick<NetworkEvent, "destination" | "protocol" | "port" | "purpose">>;
+}
+
 export function subscribeToUpdates(onUpdate: (update: LiveUpdate) => void): () => void {
   const source = new EventSource(`${API}/events`);
   source.addEventListener("open", () => onUpdate({ type: "connection", status: "connected" }));
@@ -123,6 +140,10 @@ export async function fetchMLStats(projectId: number): Promise<MLStats> {
 
 export async function fetchSbom(projectId: number): Promise<CycloneDxSbom> {
   return request<CycloneDxSbom>(`/projects/${projectId}/sbom`);
+}
+
+export async function fetchNetworkActivity(projectId: number): Promise<NetworkActivity> {
+  return request<NetworkActivity>(`/projects/${projectId}/network`);
 }
 
 export async function fetchScanHistory(projectId: number): Promise<ScanHistoryEntry[]> {

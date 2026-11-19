@@ -93,6 +93,7 @@ export default function ProjectDetail() {
           <Link to={`/project/${project.id}/ml`} className="btn">🧠 ML Outliers</Link>
           <Link to={`/project/${project.id}/graph`} className="btn">🕸️ Attention Map</Link>
           <Link to={`/project/${project.id}/history`} className="btn">📊 History</Link>
+          <Link to={`/project/${project.id}/network`} className="btn">Network activity</Link>
           <button className="btn btn-primary" onClick={handleScan} disabled={scanning}>
             {scanning ? "⟳ Scanning..." : "▶ Run Scan"}
           </button>

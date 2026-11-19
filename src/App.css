@@ -240,7 +240,7 @@
   .page-header > div:last-child { flex-wrap: wrap; }
 }
 
-/* Light-theme refinements and network-monitor demonstration. */
+/* Light-theme refinements and network-activity views. */
 .app-layout { background: #f6f8fc; }
 .sidebar { background: rgba(255, 255, 255, .92); border-right-color: #dce4f0; box-shadow: 8px 0 32px rgba(31, 55, 94, .04); }
 .page { background: radial-gradient(ellipse at 90% 0%, rgba(76, 118, 230, .11), transparent 33%), radial-gradient(ellipse at 0% 70%, rgba(33, 167, 142, .07), transparent 28%), #f6f8fc; }

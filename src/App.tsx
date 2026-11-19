@@ -26,9 +26,6 @@ function Sidebar() {
         <Link to="/" className={`nav-item ${isActive("/") ? "active" : ""}`}>
           <span className="nav-icon">⊞</span> Projects
         </Link>
-        <Link to="/network-monitor" className={`nav-item ${isActive("/network-monitor") ? "active" : ""}`}>
-          <span className="nav-icon">◌</span> Network Monitor
-        </Link>
         {isSection("/project/") && (
           <div className="sidebar-section">
             <div className="sidebar-section-title">Current Project</div>
@@ -69,10 +66,16 @@ function Sidebar() {
               <span className="nav-icon">📊</span> Scan History
             </Link>
             <Link
-              to={location.pathname.replace(/\/(tree|risk|ml|graph|history|dataset|sbom)$/, "") + "/dataset"}
+              to={location.pathname.replace(/\/(tree|risk|ml|graph|history|dataset|sbom|network)$/, "") + "/dataset"}
               className={`nav-item nav-sub ${location.pathname.endsWith("/dataset") ? "active" : ""}`}
             >
               <span className="nav-icon">📋</span> Dataset
+            </Link>
+            <Link
+              to={location.pathname.replace(/\/(tree|risk|ml|graph|history|dataset|sbom|network)$/, "") + "/network"}
+              className={`nav-item nav-sub ${location.pathname.endsWith("/network") ? "active" : ""}`}
+            >
+              <span className="nav-icon">◌</span> Network Activity
             </Link>
           </div>
         )}
@@ -93,7 +96,7 @@ function App() {
         <main className="main-content">
           <Routes>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/network-monitor" element={<NetworkMonitor />} />
+            <Route path="/project/:id/network" element={<NetworkMonitor />} />
             <Route path="/project/:id" element={<ProjectDetail />} />
             <Route path="/project/:id/tree" element={<DependencyTree />} />
             <Route path="/project/:id/risk" element={<RiskAnalysis />} />

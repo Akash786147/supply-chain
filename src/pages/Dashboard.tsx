@@ -20,7 +20,7 @@ export default function Dashboard() {
   const [branches, setBranches] = useState<GitHubBranch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState("");
   const [publicRepository, setPublicRepository] = useState<(GitHubRepository & { branches: GitHubBranch[] }) | null>(null);
-  const [importMode, setImportMode] = useState<"github" | "url">("github");
+  const [importMode, setImportMode] = useState<"github" | "url" | "local">("github");
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [importing, setImporting] = useState(false);
   const [githubNotice, setGithubNotice] = useState<string | null>(null);
@@ -211,6 +211,7 @@ export default function Dashboard() {
           <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
             <button className={`btn ${importMode === "github" ? "btn-primary" : "btn-ghost"}`} onClick={() => setImportMode("github")}>My GitHub Repositories</button>
             <button className={`btn ${importMode === "url" ? "btn-primary" : "btn-ghost"}`} onClick={() => setImportMode("url")}>Public Repository URL</button>
+            <button className={`btn ${importMode === "local" ? "btn-primary" : "btn-ghost"}`} onClick={() => setImportMode("local")}>Local Repository Path</button>
           </div>
 
           {importMode === "github" && (
@@ -267,6 +268,16 @@ export default function Dashboard() {
                 </div>
               )}
               {!publicRepository && <p className="muted" style={{ marginBottom: 0 }}>For a private repository, connect GitHub and import it from your repository list.</p>}
+            </div>
+          )}
+
+          {importMode === "local" && (
+            <div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input className="input" placeholder="C:\\Projects\\my-repository" value={repoUrl} onChange={(event) => setRepoUrl(event.target.value)} />
+                <button className="btn btn-primary" onClick={() => void handleAdd()} disabled={importing || !repoUrl.trim()}>{importing ? "Starting…" : "Analyze path"}</button>
+              </div>
+              <p className="muted" style={{ marginBottom: 0 }}>The path must be inside the backend's configured local repository root.</p>
             </div>
           )}
         </div>
