@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { fetchScanHistory, fetchProject, fetchAuditEvents, subscribeToUpdates } from "../api";
+import { fetchScanHistory, fetchProject, fetchAuditEvents, exportAuditTrail, subscribeToUpdates } from "../api";
 import type { ScanHistoryEntry, Project, AuditEvent } from "../types";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -53,7 +53,10 @@ export default function ScanHistory() {
 
       <div className="page-header">
         <h1>📊 Scan History</h1>
-        <Link to={`/project/${projectId}`} className="btn">Back to Project</Link>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button className="btn" onClick={() => void exportAuditTrail(projectId, "csv")}>Export audit CSV</button>
+          <Link to={`/project/${projectId}`} className="btn">Back to Project</Link>
+        </div>
       </div>
 
       {history.length === 0 ? (
@@ -78,10 +81,10 @@ export default function ScanHistory() {
                       <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
-                  <XAxis dataKey="scan" stroke="#666" fontSize={11} />
-                  <YAxis stroke="#666" fontSize={11} domain={[0, 100]} />
-                  <Tooltip contentStyle={{ background: "#141414", border: "1px solid #262626", borderRadius: 8, color: "#ededed" }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#dfe7f3" />
+                  <XAxis dataKey="scan" stroke="#73809a" fontSize={11} />
+                  <YAxis stroke="#73809a" fontSize={11} domain={[0, 100]} />
+                  <Tooltip contentStyle={{ background: "#ffffff", border: "1px solid #dce4f0", borderRadius: 8, color: "#16233a" }} />
                   <Area type="monotone" dataKey="riskScore" stroke="#ef4444" fill="url(#riskGrad)" strokeWidth={2} />
                 </AreaChart>
               </ResponsiveContainer>
@@ -93,10 +96,10 @@ export default function ScanHistory() {
               <p className="muted chart-desc">Tracking dependency count and risk signals across scans</p>
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
-                  <XAxis dataKey="scan" stroke="#666" fontSize={11} />
-                  <YAxis stroke="#666" fontSize={11} />
-                  <Tooltip contentStyle={{ background: "#141414", border: "1px solid #262626", borderRadius: 8, color: "#ededed" }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#dfe7f3" />
+                  <XAxis dataKey="scan" stroke="#73809a" fontSize={11} />
+                  <YAxis stroke="#73809a" fontSize={11} />
+                  <Tooltip contentStyle={{ background: "#ffffff", border: "1px solid #dce4f0", borderRadius: 8, color: "#16233a" }} />
                   <Line type="monotone" dataKey="deps" stroke="#3b82f6" strokeWidth={2} name="Dependencies" dot={{ r: 3 }} />
                   <Line type="monotone" dataKey="signals" stroke="#eab308" strokeWidth={2} name="Signals" dot={{ r: 3 }} />
                   <Line type="monotone" dataKey="anomalies" stroke="#ef4444" strokeWidth={2} name="Anomalies" dot={{ r: 3 }} />

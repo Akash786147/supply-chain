@@ -163,6 +163,7 @@ export interface ScanMeta {
   totalAnomalies: number;
   scannedAt: string;
   vulnerabilityScanStatus?: string;
+  dependencySources?: string[];
   sourceFilesScanned?: number;
   sourceFindingCount?: number;
 }

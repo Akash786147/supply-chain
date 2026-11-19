@@ -133,6 +133,20 @@ export async function fetchAuditEvents(projectId: number): Promise<AuditEvent[]>
   return request<AuditEvent[]>(`/audit?projectId=${projectId}&limit=500`);
 }
 
+export async function exportAuditTrail(projectId: number, format: "json" | "csv" = "json"): Promise<void> {
+  const response = await fetch(`${API}/projects/${projectId}/audit/export?format=${format}`, { credentials: "include" });
+  if (!response.ok) throw new Error("Failed to export audit trail");
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `project_${projectId}_audit.${format}`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 export async function fetchGlobalStats(): Promise<GlobalStats> {
   return request<GlobalStats>("/stats/global");
 }

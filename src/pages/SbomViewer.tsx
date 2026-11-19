@@ -40,6 +40,7 @@ export default function SbomViewer() {
         <div className="card stat-card"><div className="stat-value">{sbom.metadata?.component?.version || "—"}</div><div className="stat-label">Project version</div></div>
       </div>
       {scanMeta && scanMeta.vulnerabilityScanStatus !== "complete" && <div className="error-banner">Advisory lookup status: {scanMeta.vulnerabilityScanStatus || "unknown"}. An empty vulnerability section is not a clean bill of health.</div>}
+      {scanMeta?.dependencySources?.length ? <p className="muted" style={{ marginTop: 16 }}>Inventory sources: {scanMeta.dependencySources.join(", ")}.</p> : null}
 
       <section style={{ marginTop: 28 }}>
         <div className="page-header"><div><h2>Components</h2><p className="muted">Package inventory from the scanned dependency tree.</p></div><input className="sbom-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Filter packages…" aria-label="Filter SBOM components" /></div>
