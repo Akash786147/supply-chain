@@ -33,13 +33,14 @@ async function setCachedMetadata(pkg, data) {
 }
 
 // ─── NPM Registry Fetch ─────────────────────────────────────────────────────
-async function fetchNpmMetadata(packageName) {
+async function fetchNpmMetadata(packageName, onNetworkEvent) {
   const cached = await getCachedMetadata(packageName);
   if (cached) return cached;
 
   try {
     const url = `https://registry.npmjs.org/${encodeURIComponent(packageName)}`;
     const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    onNetworkEvent?.({ destination: "registry.npmjs.org", protocol: "HTTPS", port: 443, purpose: `Package metadata: ${packageName}`, policy: "expected", outcome: res.ok ? "success" : "failed" });
     if (!res.ok) return null;
     const data = await res.json();
 
@@ -69,17 +70,19 @@ async function fetchNpmMetadata(packageName) {
     await setCachedMetadata(packageName, metadata);
     return metadata;
   } catch (err) {
+    onNetworkEvent?.({ destination: "registry.npmjs.org", protocol: "HTTPS", port: 443, purpose: `Package metadata: ${packageName}`, policy: "expected", outcome: "failed" });
     console.warn(`[Registry] Failed to fetch ${packageName}: ${err.message}`);
     return null;
   }
 }
 
-async function fetchPyPIMetadata(packageName) {
+async function fetchPyPIMetadata(packageName, onNetworkEvent) {
   const cacheKey = `pypi:${packageName}`;
   const cached = await getCachedMetadata(cacheKey);
   if (cached) return cached;
   try {
     const response = await fetch(`https://pypi.org/pypi/${encodeURIComponent(packageName)}/json`, { signal: AbortSignal.timeout(10000) });
+    onNetworkEvent?.({ destination: "pypi.org", protocol: "HTTPS", port: 443, purpose: `Package metadata: ${packageName}`, policy: "expected", outcome: response.ok ? "success" : "failed" });
     if (!response.ok) return null;
     const data = await response.json();
     const releases = Object.values(data.releases || {}).flat();
@@ -101,13 +104,14 @@ async function fetchPyPIMetadata(packageName) {
     await setCachedMetadata(cacheKey, metadata);
     return metadata;
   } catch (error) {
+    onNetworkEvent?.({ destination: "pypi.org", protocol: "HTTPS", port: 443, purpose: `Package metadata: ${packageName}`, policy: "expected", outcome: "failed" });
     console.warn(`[PyPI] Failed to fetch ${packageName}: ${error.message}`);
     return null;
   }
 }
 
 // ─── Batch fetch with concurrency ────────────────────────────────────────────
-async function batchFetchMetadata(packageNames, ecosystem = "npm") {
+async function batchFetchMetadata(packageNames, ecosystem = "npm", onNetworkEvent) {
   const results = {};
   const BATCH_SIZE = 5;
   const unique = [...new Set(packageNames)];
@@ -115,7 +119,7 @@ async function batchFetchMetadata(packageNames, ecosystem = "npm") {
   for (let i = 0; i < unique.length; i += BATCH_SIZE) {
     const batch = unique.slice(i, i + BATCH_SIZE);
     const promises = batch.map(async (name) => {
-      const meta = ecosystem === "pypi" ? await fetchPyPIMetadata(name) : await fetchNpmMetadata(name);
+      const meta = ecosystem === "pypi" ? await fetchPyPIMetadata(name, onNetworkEvent) : await fetchNpmMetadata(name, onNetworkEvent);
       results[name] = meta;
     });
     await Promise.all(promises);
@@ -381,7 +385,7 @@ function vulnerabilitySeverity(vulnerability) {
   return raw ? "low" : "unknown";
 }
 
-async function queryOsv(nodes, ecosystem) {
+async function queryOsv(nodes, ecosystem, onNetworkEvent) {
   const candidates = nodes.filter((node) => node.depth > 0 && node.name && node.version && node.version !== "latest" && node.version !== "0.0.0");
   const findings = [];
   for (let offset = 0; offset < candidates.length; offset += 100) {
@@ -396,6 +400,7 @@ async function queryOsv(nodes, ecosystem) {
           package: { name: node.name, ecosystem: osvEcosystem(ecosystem) }, version: node.version,
         })) }),
       });
+      onNetworkEvent?.({ destination: "api.osv.dev", protocol: "HTTPS", port: 443, purpose: "Vulnerability advisory lookup", policy: "expected", outcome: response.ok ? "success" : "failed" });
       if (!response.ok) throw new Error(`OSV returned ${response.status}`);
       const payload = await response.json();
       const idLists = batch.map((_, index) => (payload.results?.[index]?.vulns || []).map(({ id }) => id).filter(Boolean).slice(0, 20));
@@ -493,6 +498,8 @@ export async function cloneAndAnalyze(repoUrl, projectId, { onStage, pipelineId,
   }
 
   const startTime = Date.now();
+  const networkEvents = [];
+  const recordNetworkEvent = (event) => networkEvents.push({ observedAt: new Date().toISOString(), ...event });
 
   const notifyStage = async (update) => {
     try {
@@ -528,6 +535,11 @@ export async function cloneAndAnalyze(repoUrl, projectId, { onStage, pipelineId,
     // Step 1: Clone
     console.log(`[Analyzer] Step 1/5: Cloning ${repoUrl}...`);
     const commitHash = await runStage("Clone Repository", async () => {
+      if (path.isAbsolute(repoUrl) && await fs.pathExists(repoUrl)) {
+        await fs.copy(repoUrl, projectDir, { filter: (source) => !/[\\/](node_modules|\.git|dist|build)([\\/]|$)/.test(source) });
+        const stat = await fs.stat(repoUrl);
+        return `local-${Math.floor(stat.mtimeMs)}`;
+      }
       let git = simpleGit();
       let askPassFile;
       try {
@@ -553,6 +565,7 @@ export async function cloneAndAnalyze(repoUrl, projectId, { onStage, pipelineId,
           ...(branch ? [`--branch=${branch}`] : []),
         ];
         await git.clone(repoUrl, projectDir, cloneOptions);
+        recordNetworkEvent({ destination: "github.com", protocol: "HTTPS", port: 443, purpose: "Repository checkout", policy: "expected", outcome: "success" });
       } finally {
         if (askPassFile) await fs.remove(askPassFile).catch(() => {});
       }
@@ -602,7 +615,7 @@ export async function cloneAndAnalyze(repoUrl, projectId, { onStage, pipelineId,
     await runStage("Enrich Risk Metadata", async () => {
       const packageNames = collectPackageNames(dependencyTree);
       console.log(`[Analyzer]   Found ${packageNames.size} unique packages. Fetching metadata...`);
-      const metadata = await batchFetchMetadata([...packageNames], ecosystem);
+       const metadata = await batchFetchMetadata([...packageNames], ecosystem, recordNetworkEvent);
       enrichTree(dependencyTree, metadata);
     });
 
@@ -613,11 +626,12 @@ export async function cloneAndAnalyze(repoUrl, projectId, { onStage, pipelineId,
     try {
       vulnerabilityResult = await runStage("SBOM and Vulnerability Analysis", async () => {
         const nodes = collectTreeNodes(dependencyTree);
-        const result = await queryOsv(nodes, ecosystem);
+        const result = await queryOsv(nodes, ecosystem, recordNetworkEvent);
         recomputePropagatedRisk(dependencyTree);
         return result;
       });
     } catch (error) {
+      recordNetworkEvent({ destination: "api.osv.dev", protocol: "HTTPS", port: 443, purpose: "Vulnerability advisory lookup", policy: "expected", outcome: "failed" });
       console.warn(`[OSV] Advisory lookup unavailable: ${error.message}`);
       vulnerabilityResult = { findings: [], queriedPackages: 0, status: "unavailable", error: error.message };
     }
@@ -668,6 +682,7 @@ export async function cloneAndAnalyze(repoUrl, projectId, { onStage, pipelineId,
         scannedAt: new Date().toISOString(),
       },
       codeFindings: codeScanResult.findings,
+      networkEvents,
     };
 
     const sbom = createCycloneDx(dependencyTree, ecosystem, commitHash, pipelineId, vulnerabilityResult.findings);

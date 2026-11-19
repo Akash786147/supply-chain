@@ -401,9 +401,11 @@ async function runProjectScan(project, trigger, githubAccessToken = null, trigge
   });
 
   try {
-    const parsedRepo = parseGitHubRepoUrl(project.repoUrl);
-    const repository = await getRepositoryDetails(parsedRepo.fullName, githubAccessToken);
-    if (!pipeline.branch || !(await hasRepositoryBranch(parsedRepo.fullName, pipeline.branch, githubAccessToken))) {
+    let parsedRepo = null;
+    try { parsedRepo = parseGitHubRepoUrl(project.repoUrl); } catch { /* local repository path */ }
+    if (parsedRepo) {
+      const repository = await getRepositoryDetails(parsedRepo.fullName, githubAccessToken);
+      if (!pipeline.branch || !(await hasRepositoryBranch(parsedRepo.fullName, pipeline.branch, githubAccessToken))) {
       const previousBranch = pipeline.branch;
       pipeline.branch = repository.defaultBranch;
       project.branch = pipeline.branch;
@@ -417,6 +419,7 @@ async function runProjectScan(project, trigger, githubAccessToken = null, trigge
         previousBranch,
         branch: pipeline.branch,
       });
+      }
     }
 
     const result = await cloneAndAnalyze(project.repoUrl, projectId, {
@@ -586,13 +589,21 @@ app.post("/api/projects", async (req, res) => {
   const session = getGitHubSession(req);
   let parsedRepo;
   let repository;
+  let localRepository = false;
   try {
     parsedRepo = parseGitHubRepoUrl(repoUrl.trim());
   } catch (error) {
-    return res.status(400).json({ error: error.message });
+    const permittedRoot = process.env.LOCAL_REPOSITORY_ROOT;
+    const candidate = path.resolve(repoUrl.trim());
+    const root = permittedRoot ? path.resolve(permittedRoot) : null;
+    const insideRoot = root && (candidate === root || candidate.startsWith(`${root}${path.sep}`));
+    if (!insideRoot || !(await fs.pathExists(candidate))) return res.status(400).json({ error: `${error.message}. For a local repository, set LOCAL_REPOSITORY_ROOT and provide a path within it.` });
+    localRepository = true;
+    repository = { name: path.basename(candidate), defaultBranch: "local", private: true };
+    parsedRepo = { cloneUrl: candidate, fullName: null };
   }
   try {
-    repository = await getRepositoryDetails(parsedRepo.fullName, session?.accessToken);
+    if (!localRepository) repository = await getRepositoryDetails(parsedRepo.fullName, session?.accessToken);
   } catch (error) {
     if (error.status === 404 && !session) {
       return res.status(401).json({ error: "This repository is private or unavailable. Connect GitHub and import it from your repository list." });
@@ -600,11 +611,11 @@ app.post("/api/projects", async (req, res) => {
     return sendGitHubError(res, error);
   }
 
-  if (repository.private && !session) {
+  if (!localRepository && repository.private && !session) {
     return res.status(401).json({ error: "Connect GitHub before importing a private repository." });
   }
   const normalizedRepoUrl = parsedRepo.cloneUrl;
-  const selectedBranch = typeof branch === "string" && branch.trim() ? branch.trim() : repository.defaultBranch;
+  const selectedBranch = localRepository ? "local" : (typeof branch === "string" && branch.trim() ? branch.trim() : repository.defaultBranch);
   if (!selectedBranch) return res.status(400).json({ error: "Could not determine the repository's default branch" });
   const name = repository.name || parsedRepo.repo;
   const projectData = {
@@ -688,6 +699,19 @@ app.get("/api/projects/:id/sbom", async (req, res) => {
     res.setHeader("Content-Disposition", `attachment; filename="project-${projectId}.sbom.cdx.json"`);
   }
   res.json(sbom);
+});
+
+app.get("/api/projects/:id/network", async (req, res) => {
+  const projectId = Number(req.params.id);
+  const scan = await getLatestScanData(projectId);
+  if (!scan) return res.status(404).json({ error: "No completed scan is available. Run a scan to collect network activity." });
+  const ecosystem = scan.scanMeta?.ecosystem || "npm";
+  const allowlist = [
+    { destination: "github.com", protocol: "HTTPS", port: 443, purpose: "Repository checkout" },
+    ...(ecosystem === "pypi" ? [{ destination: "pypi.org", protocol: "HTTPS", port: 443, purpose: "Package metadata" }] : [{ destination: "registry.npmjs.org", protocol: "HTTPS", port: 443, purpose: "Package metadata" }]),
+    { destination: "api.osv.dev", protocol: "HTTPS", port: 443, purpose: "Vulnerability advisories" },
+  ];
+  res.json({ projectId, commitHash: scan.scanMeta?.commitHash, events: scan.networkEvents || [], allowlist });
 });
 
 // Return recent local audit records. `actor` reflects the trigger source; this
