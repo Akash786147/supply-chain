@@ -1,0 +1,11 @@
+{
+  "name": "inventory-portal",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A small repository for presenting DepGuard AI project analysis",
+  "dependencies": {
+    "axios": "1.7.9",
+    "express": "4.21.2",
+    "lodash": "4.17.21"
+  }
+}
