@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import fs from "fs-extra";
 import path from "path";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { cloneAndAnalyze, flattenForDb, countNodes, countSignals } from "./utils/analyzer.js";
 import {
   getDb,
@@ -48,7 +49,12 @@ import {
 } from "./utils/github.js";
 
 const app = express();
-app.use(express.json());
+app.use(express.json({
+  verify(req, _res, buffer) {
+    // Preserve the exact bytes solely for GitHub's HMAC verification.
+    req.rawBody = Buffer.from(buffer);
+  },
+}));
 const allowedOrigins = new Set((process.env.FRONTEND_URL || "http://localhost:5173").split(",").map((origin) => origin.trim().replace(/\/$/, "")));
 app.use(cors({
   origin(origin, callback) {
@@ -207,6 +213,29 @@ function redactRepositoryUrl(repoUrl) {
   }
 }
 
+function verifyGitHubWebhook(req) {
+  const secret = process.env.GITHUB_WEBHOOK_SECRET;
+  const signature = req.get("x-hub-signature-256");
+  if (!secret) return { ok: false, error: "GitHub webhook delivery is not configured" };
+  if (!signature || !req.rawBody) return { ok: false, error: "Missing GitHub webhook signature" };
+  const expected = `sha256=${createHmac("sha256", secret).update(req.rawBody).digest("hex")}`;
+  const received = Buffer.from(signature);
+  const computed = Buffer.from(expected);
+  if (received.length !== computed.length || !timingSafeEqual(received, computed)) {
+    return { ok: false, error: "GitHub webhook signature is invalid" };
+  }
+  return { ok: true };
+}
+
+function projectMatchesWebhook(project, fullName, branch) {
+  try {
+    return parseGitHubRepoUrl(project.repoUrl).fullName.toLowerCase() === fullName.toLowerCase()
+      && project.branch === branch;
+  } catch {
+    return false;
+  }
+}
+
 const interruptedPipelines = pipelines.filter((run) => run.status === "running");
 for (const pipeline of interruptedPipelines) {
   pipeline.status = "failed";
@@ -329,7 +358,7 @@ async function getLatestSbom(projectId) {
   return null;
 }
 
-async function runProjectScan(project, trigger, githubAccessToken = null) {
+async function runProjectScan(project, trigger, githubAccessToken = null, triggerContext = {}) {
   const projectId = project.id;
   if (activeScans.has(projectId)) return null;
   activeScans.add(projectId);
@@ -341,6 +370,7 @@ async function runProjectScan(project, trigger, githubAccessToken = null) {
     trigger,
     branch: project.branch || "main",
     commit: "pending",
+    requestedCommit: triggerContext.commitHash || null,
     status: "running",
     scannerVersion: "1.1.0",
     model: "Isolation Forest (random_state=42)",
@@ -367,6 +397,7 @@ async function runProjectScan(project, trigger, githubAccessToken = null) {
     trigger,
     repoUrl: redactRepositoryUrl(project.repoUrl),
     branch: pipeline.branch,
+    commitHash: pipeline.requestedCommit || undefined,
   });
 
   try {
@@ -679,6 +710,22 @@ app.get("/api/audit", async (req, res) => {
   res.json([...byId.values()].sort((a, b) => new Date(b.occurredAt) - new Date(a.occurredAt)).slice(0, boundedLimit));
 });
 
+app.get("/api/projects/:id/audit/export", async (req, res) => {
+  const projectId = Number(req.params.id);
+  const format = String(req.query.format || "json").toLowerCase();
+  if (!Number.isInteger(projectId) || projectId < 1) return res.status(400).json({ error: "Project ID must be a positive integer" });
+  if (!["json", "csv"].includes(format)) return res.status(400).json({ error: "Use json or csv format" });
+  const events = await getAuditEvents({ projectId, limit: 1000 });
+  await recordAuditEvent({ action: "audit.exported", actor: "user", projectId, format, rows: events.length });
+  const filename = `project_${projectId}_audit_${new Date().toISOString().slice(0, 10)}.${format}`;
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  if (format === "json") return res.type("application/json").send(JSON.stringify(events, null, 2));
+  const fields = ["id", "occurredAt", "actor", "action", "projectId", "pipelineId", "trigger", "branch", "commitHash", "stage", "status", "riskLevel", "riskScore", "decision", "error", "previousHash", "eventHash", "integrity"];
+  const quote = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+  const csv = [fields.join(","), ...events.map((event) => fields.map((field) => quote(event[field])).join(","))].join("\n");
+  return res.type("text/csv").send(csv);
+});
+
 // POST trigger a new scan/pipeline
 app.post("/api/projects/:id/scan", async (req, res) => {
   const projectId = Number(req.params.id);
@@ -924,14 +971,39 @@ app.get("/api/projects/:id/dataset/export", async (req, res) => {
   }
 });
 
-// GitHub webhook
-app.post("/api/github-webhook", (req, res) => {
-  const event = req.headers["x-github-event"];
-  console.log(`[Webhook] Received event: ${event}`);
-  if (event === "push") {
-    console.log("[CI] Triggering supply chain analysis pipeline...");
+// GitHub push webhook. Deliveries are rejected unless their HMAC signature is
+// verified with GITHUB_WEBHOOK_SECRET. Configure GITHUB_SCAN_TOKEN when
+// accepted deliveries must scan private repositories.
+app.post("/api/github-webhook", async (req, res) => {
+  const verification = verifyGitHubWebhook(req);
+  if (!verification.ok) return res.status(401).json({ error: verification.error });
+
+  const event = req.get("x-github-event");
+  if (event !== "push") return res.status(202).json({ accepted: false, reason: "Only push events trigger scans" });
+  const fullName = req.body?.repository?.full_name;
+  const ref = req.body?.ref;
+  const commitHash = req.body?.after;
+  if (typeof fullName !== "string" || typeof ref !== "string" || !ref.startsWith("refs/heads/")) {
+    return res.status(400).json({ error: "Push payload is missing a repository or branch" });
   }
-  res.sendStatus(200);
+  const branch = ref.slice("refs/heads/".length);
+  const projects = db ? await dbGetProjects() : inMemoryProjects;
+  const matches = projects.filter((project) => projectMatchesWebhook(project, fullName, branch));
+  const queued = [];
+
+  for (const project of matches) {
+    if (activeScans.has(project.id)) {
+      await recordAuditEvent({ action: "webhook.skipped", actor: "github-webhook", projectId: project.id, trigger: "push", branch, commitHash, error: "A scan is already running" });
+      continue;
+    }
+    await recordAuditEvent({ action: "webhook.accepted", actor: "github-webhook", projectId: project.id, trigger: "push", branch, commitHash, repoUrl: redactRepositoryUrl(project.repoUrl) });
+    void runProjectScan(project, "webhook", process.env.GITHUB_SCAN_TOKEN || null, { commitHash }).catch((error) => {
+      console.error(`[Webhook] Could not start scan for project ${project.id}:`, error.message);
+    });
+    const pipeline = pipelines.at(-1);
+    if (pipeline?.projectId === project.id) queued.push({ projectId: project.id, pipelineId: pipeline.id });
+  }
+  res.status(202).json({ accepted: true, repository: fullName, branch, queued, matchedProjects: matches.length });
 });
 
 const PORT = Number.parseInt(process.env.PORT || "3001", 10);

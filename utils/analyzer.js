@@ -352,6 +352,8 @@ async function detectEcosystem(projectDir) {
   if (await fs.pathExists(path.join(projectDir, "package.json"))) return "npm";
   if (await fs.pathExists(path.join(projectDir, "requirements.txt"))) return "pypi";
   if (await fs.pathExists(path.join(projectDir, "Pipfile.lock"))) return "pypi";
+  if (await fs.pathExists(path.join(projectDir, "poetry.lock"))) return "pypi";
+  if (await fs.pathExists(path.join(projectDir, "uv.lock"))) return "pypi";
   if (await fs.pathExists(path.join(projectDir, "pyproject.toml"))) return "pypi";
   return "npm";
 }
@@ -651,6 +653,7 @@ export async function cloneAndAnalyze(repoUrl, projectId, { onStage, pipelineId,
       edges: mlResult?.edges || [],
       scanMeta: {
         ecosystem,
+        dependencySources: dependencyTree.dependencySources || [],
         pipelineId,
         commitHash,
         scanDurationMs,
@@ -702,39 +705,69 @@ function transformNpmTree(node, key) {
 
 // ─── Parse Python requirements.txt ───────────────────────────────────────────
 async function parsePythonDeps(projectDir) {
-  const reqFile = path.join(projectDir, "requirements.txt");
-  const children = [];
+  const dependencies = new Map();
+  const dependencySources = [];
+  const add = (name, version, source) => {
+    if (!name || /^python$/i.test(name)) return;
+    const key = name.toLowerCase().replace(/[-_.]+/g, "-");
+    const candidate = { name, version: version || "latest", source };
+    const existing = dependencies.get(key);
+    // Prefer an exact pinned version over an unpinned/range-derived entry.
+    if (!existing || (existing.version === "latest" && candidate.version !== "latest")) dependencies.set(key, candidate);
+  };
 
-  if (await fs.pathExists(reqFile)) {
-    const content = await fs.readFile(reqFile, "utf-8");
-    const lines = content.split("\n").filter((l) => l.trim() && !l.startsWith("#") && !l.startsWith("-"));
+  const parseRequirement = (line, source) => {
+    const clean = line.split("#", 1)[0].split(";", 1)[0].trim();
+    if (!clean || clean.startsWith("-") || clean.includes("://")) return;
+    const exact = clean.match(/^([A-Za-z0-9_.-]+)(?:\[[^\]]*\])?\s*(?:===|==)\s*([A-Za-z0-9!+._-]+)/);
+    const unpinned = clean.match(/^([A-Za-z0-9_.-]+)(?:\[[^\]]*\])?/);
+    if (exact) add(exact[1], exact[2], source);
+    else if (unpinned) add(unpinned[1], "latest", source);
+  };
 
-    for (const line of lines) {
-      const match = line.match(/^([a-zA-Z0-9_-]+)\s*([><=!~]+\s*[\d.]+)?/);
-      if (match) {
-        children.push({
-          id: match[1],
-          name: match[1],
-          version: match[2] ? match[2].replace(/[><=!~\s]/g, "") : "latest",
-          riskScore: 0,
-          riskLevel: "low",
-          signals: [],
-          children: [],
-        });
-      }
-    }
+  const requirementFiles = (await fs.readdir(projectDir)).filter((file) => /^requirements(?:[-_.][\w-]+)?\.txt$/i.test(file));
+  for (const file of requirementFiles) {
+    const source = file;
+    const content = await fs.readFile(path.join(projectDir, file), "utf8");
+    content.split(/\r?\n/).forEach((line) => parseRequirement(line, source));
+    dependencySources.push(source);
   }
 
-  const pkgName = path.basename(projectDir);
-  return {
-    id: pkgName,
-    name: pkgName,
-    version: "1.1.0",
+  const pipfile = path.join(projectDir, "Pipfile.lock");
+  if (await fs.pathExists(pipfile)) {
+    const lock = await fs.readJson(pipfile);
+    for (const section of [lock.default, lock.develop]) {
+      for (const [name, details] of Object.entries(section || {})) {
+        const version = typeof details?.version === "string" && /^==/.test(details.version) ? details.version.replace(/^==+/, "") : "latest";
+        add(name, version, "Pipfile.lock");
+      }
+    }
+    dependencySources.push("Pipfile.lock");
+  }
+
+  for (const lockName of ["poetry.lock", "uv.lock"]) {
+    const lockFile = path.join(projectDir, lockName);
+    if (!(await fs.pathExists(lockFile))) continue;
+    const content = await fs.readFile(lockFile, "utf8");
+    for (const block of content.split(/\[\[package\]\]/).slice(1)) {
+      const name = block.match(/^\s*name\s*=\s*"([^"]+)"/m)?.[1];
+      const version = block.match(/^\s*version\s*=\s*"([^"]+)"/m)?.[1];
+      if (name) add(name, version || "latest", lockName);
+    }
+    dependencySources.push(lockName);
+  }
+
+  const children = [...dependencies.values()].sort((left, right) => left.name.localeCompare(right.name)).map((dependency) => ({
+    id: dependency.name,
+    name: dependency.name,
+    version: dependency.version,
     riskScore: 0,
     riskLevel: "low",
     signals: [],
-    children,
-  };
+    children: [],
+  }));
+  const pkgName = path.basename(projectDir);
+  return { id: pkgName, name: pkgName, version: "1.1.0", riskScore: 0, riskLevel: "low", signals: [], children, dependencySources };
 }
 
 // Export helper for server to use

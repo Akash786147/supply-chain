@@ -18,6 +18,12 @@ The OAuth token is kept in the backend process memory and is not written to proj
 
 Repository metadata and branch names are loaded from GitHub before import. If the branch is left unspecified by an API client, the backend selects the repository's actual default branch instead of assuming `main`.
 
+## Verified GitHub push scans
+
+Set `GITHUB_WEBHOOK_SECRET` in `backend/.env`, then add a GitHub webhook that posts **Push** events to `http://localhost:3001/api/github-webhook` (or the deployed equivalent). The endpoint validates GitHub's `X-Hub-Signature-256` HMAC before accepting a delivery. It queues scans only for an imported project with the same repository and branch, and records both the delivery commit and pipeline activity in the audit trail.
+
+For private repositories, set `GITHUB_SCAN_TOKEN` to a least-privilege token that can read the imported repository. Keep this backend-only; it must never be sent to the browser. The scanner records the checkout commit that it actually analyzed; a webhook's `after` hash is also retained in the pipeline and audit context for review.
+
 ## Python ML environment
 
 The ML stage requires Python 3, NumPy, scikit-learn, and NetworkX. From `backend/`, create and populate a local environment:
@@ -45,7 +51,7 @@ The first migration creates the durable audit-event copy. The second stores full
 - Each successful scan writes a CycloneDX 1.6 SBOM to `data/<project-id>.sbom.json` and exposes it at `/api/projects/<project-id>/sbom`.
 - Result files are served only when their pipeline ID matches a persisted successful run. Legacy JSON files without that identity are treated as stale; rerun those projects to regenerate trusted snapshots.
 - OSV.dev is queried for pinned npm and PyPI package versions. Advisory lookup failure is recorded in `scanMeta.vulnerabilityScanStatus`; a failed external lookup must not be interpreted as a clean vulnerability result.
-- Python registry metadata comes from PyPI. Dependency extraction currently supports basic `requirements.txt` lines only; it is not a full resolver for lockfiles, extras, or environment markers.
+- Python registry metadata comes from PyPI. Dependency extraction reads `requirements*.txt`, `Pipfile.lock`, `poetry.lock`, and `uv.lock`, retaining exact pinned versions when present. It does not resolve environment markers, VCS dependencies, extras, or a full transitive graph.
 - Isolation Forest is unsupervised. Current evaluation fields describe sample count and anomaly rate, not measured accuracy. A reviewed labelled dataset is still needed for precision/recall.
 - OSV advisories determine dependency security severity. Deprecation, age, maintainer count, license, and missing metadata stay as informational context and do not independently raise a dependency to high or critical risk.
 - The source-code stage applies bounded CWE-oriented pattern checks to first-party source files (for example unsafe dynamic execution, disabled TLS verification, unsafe deserialization, and likely hard-coded credentials). These are review signals, not a CVE database or a substitute for a full SAST engine; results can need human confirmation.
