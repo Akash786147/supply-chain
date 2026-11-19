@@ -8,6 +8,7 @@ import NetworkGraph from "./pages/NetworkGraph";
 import ScanHistory from "./pages/ScanHistory";
 import DatasetBrowser from "./pages/DatasetBrowser";
 import SbomViewer from "./pages/SbomViewer";
+import NetworkMonitor from "./pages/NetworkMonitor";
 import "./App.css";
 
 function Sidebar() {
@@ -24,6 +25,9 @@ function Sidebar() {
       <nav className="sidebar-nav">
         <Link to="/" className={`nav-item ${isActive("/") ? "active" : ""}`}>
           <span className="nav-icon">⊞</span> Projects
+        </Link>
+        <Link to="/network-monitor" className={`nav-item ${isActive("/network-monitor") ? "active" : ""}`}>
+          <span className="nav-icon">◌</span> Network Monitor
         </Link>
         {isSection("/project/") && (
           <div className="sidebar-section">
@@ -89,6 +93,7 @@ function App() {
         <main className="main-content">
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/network-monitor" element={<NetworkMonitor />} />
             <Route path="/project/:id" element={<ProjectDetail />} />
             <Route path="/project/:id/tree" element={<DependencyTree />} />
             <Route path="/project/:id/risk" element={<RiskAnalysis />} />
